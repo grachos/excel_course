@@ -1,3 +1,5 @@
+import {mountOwner, ownerStatus, progressFromScores} from './owner.js';
+import {explainPractice, tutorConfigured} from './tutor.js';
 import express from 'express';
 import pg from 'pg';
 import ExcelJS from 'exceljs';
@@ -7,7 +9,7 @@ import {rateLimit} from 'express-rate-limit';
 import {randomBytes,scryptSync,timingSafeEqual,createHash} from 'node:crypto';
 import yauzl from 'yauzl';
 import {modules} from './course.js';
-import {moduleGrade,gradeChecks} from './grading.js';
+import {gradeChecks} from './grading.js';
 const app=express(), db=new pg.Pool({connectionString:process.env.DATABASE_URL});
 const origin=process.env.APP_ORIGIN;
 if(!origin||!process.env.DATABASE_URL) throw Error('Configure APP_ORIGIN and DATABASE_URL');
@@ -18,7 +20,9 @@ app.use((req,res,next)=>{if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.
 await db.query(`CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,email TEXT UNIQUE NOT NULL,name TEXT NOT NULL,password TEXT NOT NULL,tool TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL);
 CREATE TABLE IF NOT EXISTS attempts(id SERIAL PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,module INT NOT NULL,kind TEXT NOT NULL,score NUMERIC NOT NULL,feedback JSONB NOT NULL,created_at TIMESTAMPTZ DEFAULT now());
-CREATE TABLE IF NOT EXISTS challenges(id TEXT PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,module INT NOT NULL,kind TEXT NOT NULL,answers JSONB NOT NULL,expires TIMESTAMPTZ NOT NULL);`);
+CREATE TABLE IF NOT EXISTS challenges(id TEXT PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,module INT NOT NULL,kind TEXT NOT NULL,answers JSONB NOT NULL,expires TIMESTAMPTZ NOT NULL);
+CREATE TABLE IF NOT EXISTS platform_owner(singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton), user_id INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT);
+CREATE INDEX IF NOT EXISTS attempts_user_id_id ON attempts(user_id,id);`);
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const safeUser=u=>({id:u.id,name:u.name,email:u.email,tool:u.tool});
 const authLimit=rateLimit({windowMs:15*60000,limit:20});
@@ -50,9 +54,10 @@ app.use('/api',async(req,res,next)=>{
 });
 async function state(uid){
  const rows=(await db.query('SELECT module,kind,MAX(score)::float AS score FROM attempts WHERE user_id=$1 GROUP BY module,kind',[uid])).rows;
- return modules.map(m=>{const scores=Object.fromEntries(rows.filter(r=>r.module===m.id).map(r=>[r.kind,r.score]));return {id:m.id,scores,...moduleGrade(scores,m.id)};});
+ return progressFromScores(rows);
 }
-app.get('/api/me',async(req,res)=>res.json({user:safeUser(req.user),progress:await state(req.user.id),aiConfigured:!!(process.env.OPENAI_API_KEY&&process.env.OPENAI_MODEL)}));
+app.get('/api/me',async(req,res)=>res.json({user:safeUser(req.user),progress:await state(req.user.id),aiConfigured:tutorConfigured(),...(await ownerStatus(db,req.user.id))}));
+mountOwner(app, db);
 app.post('/api/logout',async(req,res)=>{await db.query('DELETE FROM sessions WHERE token=$1',[hash(req.token)]);res.clearCookie('session',{path:'/'});res.json({ok:true});});
 app.get('/api/modules',(req,res)=>res.json(modules.map(({questions,checks,...m})=>m)));
 app.get('/api/history',async(req,res)=>res.json((await db.query('SELECT id,module,kind,score,feedback,created_at FROM attempts WHERE user_id=$1 ORDER BY id DESC LIMIT 100',[req.user.id])).rows));
@@ -81,11 +86,10 @@ app.post('/api/modules/:id/practice',rateLimit({windowMs:60000,limit:5}),upload.
  const sheet=w.getWorksheet('Entrega');if(!sheet)return res.status(400).json({error:'Conserva la hoja llamada Entrega.'});
  const answers={};for(const c of req.module.checks){let v=sheet.getCell(c.cell).value;if(v&&typeof v==='object')v=v.result;answers[c.cell]=v;}
  const report=gradeChecks(req.module.checks,answers); report.mode='rules';report.note='Se verifican resultados guardados. No se recalculan fórmulas ni se califican gráficos o formatos. Si faltan resultados, abre, recalcula y guarda desde Excel o Sheets.';
- if(process.env.OPENAI_API_KEY&&process.env.OPENAI_MODEL){
- try{
- const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},signal:AbortSignal.timeout(15000),body:JSON.stringify({model:process.env.OPENAI_MODEL,messages:[{role:'system',content:'Eres tutor de hojas de cálculo. Explica en español los hallazgos dados, en máximo 180 palabras. No cambies la nota, no inventes errores ni afirmes revisar fórmulas. Da pistas para un nuevo intento.'},{role:'user',content:JSON.stringify({module:req.module.title,score:report.score,details:report.details})}],max_completion_tokens:500})});
- if(r.ok){const body=await r.json();const reply=body.choices?.[0]?.message?.content;if(reply){report.tutor=reply;report.mode='ai';}}
- }catch{}
+ const explanation = await explainPractice(req.module.title, report.details);
+ if (explanation) {
+   report.tutor = explanation;
+   report.mode = 'ai';
  }
  await save(req,'practice',report);res.json(report);
 });
@@ -115,5 +119,5 @@ app.post('/api/modules/:id/exam/submit',async(req,res)=>{
 });
 app.get('/health',(req,res)=>res.json({ok:true}));
 app.use(express.static('public'));
-app.use((err,req,res,next)=>{console.error(err.name,err.code||'request_failed');res.status(err instanceof multer.MulterError?400:500).json({error:err instanceof multer.MulterError?'El archivo supera los límites permitidos.':'No pudimos completar la solicitud. Intenta nuevamente.'});});
+app.use((err,req,res,next)=>{console.error(err.name,err.code||'request_failed');if(res.headersSent)return next(err);res.status(err instanceof multer.MulterError?400:500).json({error:err instanceof multer.MulterError?'El archivo supera los límites permitidos.':'No pudimos completar la solicitud. Intenta nuevamente.'});});
 app.listen(process.env.PORT||3000,'0.0.0.0');

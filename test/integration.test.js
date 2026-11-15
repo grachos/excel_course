@@ -4,7 +4,7 @@ import {spawn} from 'node:child_process';
 import ExcelJS from 'exceljs';
 test('sessions, isolation, workbook review and module unlocking',{skip:!process.env.DATABASE_URL,timeout:30000},async()=>{
  const origin='http://127.0.0.1:3101';
- const child=spawn(process.execPath,['server.js'],{env:{...process.env,APP_ORIGIN:origin,PORT:'3101',NODE_ENV:'test',OPENAI_API_KEY:''},stdio:'inherit'});
+ const child=spawn(process.execPath,['server.js'],{env:{...process.env,APP_ORIGIN:origin,PORT:'3101',NODE_ENV:'test',OPENAI_API_KEY:'',OWNER_SETUP_TOKEN:'test-only-owner-code'},stdio:'inherit'});
  try{
  let ready=false;for(let i=0;i<60;i++){try{ready=(await fetch(origin+'/health')).ok;}catch{}if(ready)break;await new Promise(r=>setTimeout(r,150));}assert.equal(ready,true);
  async function request(path,{cookie,body,method='GET',raw=false,originOverride=origin}={}){
@@ -33,6 +33,26 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const cookieB=b.headers.get('set-cookie').split(';')[0];
  assert.deepEqual(await(await request('/history',{cookie:cookieB})).json(),[]);
  assert.equal((await request('/modules/2/template',{cookie:cookieB})).status,403);
+ assert.equal((await request('/owner/report.xlsx',{cookie})).status,403);
+ assert.equal((await request('/owner/claim',{cookie,method:'POST',body:{token:'wrong'}})).status,403);
+ assert.equal((await request('/owner/claim',{cookie:cookieB,method:'POST',body:{token:'test-only-owner-code'}})).status,201);
+ assert.equal((await request('/owner/claim',{cookie,method:'POST',body:{token:'test-only-owner-code'}})).status,409);
+ assert.equal((await (await request('/me',{cookie:cookieB})).json()).isOwner,true);
+ const ownerList = await (await request('/owner/students?q='+encodeURIComponent(email),{cookie:cookieB})).json();
+ const student = ownerList.students.find(row => row.email === email);
+ assert.equal(student.approved,1);
+ assert.equal((await request('/owner/students/'+student.id,{cookie})).status,403);
+ const detail = await (await request('/owner/students/'+student.id,{cookie:cookieB})).json();
+ assert.equal(detail.attempts.length,3);
+ for(const path of ['/owner/report.xlsx','/owner/students/'+student.id+'/report.xlsx']){
+ const response = await request(path,{cookie:cookieB});
+ assert.equal(response.status,200);
+ assert.equal(response.headers.get('cache-control'),'no-store');
+ const report = new ExcelJS.Workbook();
+ await report.xlsx.load(Buffer.from(await response.arrayBuffer()));
+ assert.equal(report.worksheets[0].getCell('B2').value,email);
+ if(path.includes('/students/'))assert.equal(report.getWorksheet('Intentos y correcciones').rowCount,4);
+ }
  await request('/logout',{cookie,method:'POST'});
  assert.equal((await request('/me',{cookie})).status,401);
  }finally{child.kill('SIGTERM');}

@@ -17,6 +17,8 @@ services:
         value: production
       - key: NODE_VERSION
         value: "22"
+      - key: OWNER_SETUP_TOKEN
+        generateValue: true
       - key: APP_ORIGIN
         fromService:
           name: celda-excel-course
@@ -26,7 +28,8 @@ services:
         fromDatabase:
           name: celda-excel-course-db
           property: connectionString
-# Set optional OPENAI_API_KEY and OPENAI_MODEL in Render's Environment page.
+# Set OPENAI_API_KEY in Render's Environment page to activate GPT-6 Luna.
+# OPENAI_MODEL can override the default.
 # They are omitted here so the initial deployment can use rule-based feedback.
 databases:
   - name: celda-excel-course-db
