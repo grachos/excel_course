@@ -1,0 +1,38 @@
+# Preview deployment. Free PostgreSQL expires after 30 days.
+# Upgrade the database before enrolling a two-month cohort.
+services:
+  - type: web
+    name: celda-excel-course
+    runtime: node
+    plan: free
+    region: virginia
+    repo: https://github.com/grachos/excel_course
+    branch: main
+    buildCommand: npm install --omit=dev && npm run check
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: APP_ORIGIN
+        fromService:
+          name: celda-excel-course
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: DATABASE_URL
+        fromDatabase:
+          name: celda-excel-course-db
+          property: connectionString
+# Set optional OPENAI_API_KEY and OPENAI_MODEL in Render's Environment page.
+# They are omitted here so the initial deployment can use rule-based feedback.
+databases:
+  - name: celda-excel-course-db
+    plan: free
+    region: virginia
+    postgresMajorVersion: "16"
+    databaseName: excel_course
+    user: excel_course
+    ipAllowList: []
