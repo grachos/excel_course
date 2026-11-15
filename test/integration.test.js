@@ -53,6 +53,38 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal(report.worksheets[0].getCell('B2').value,email);
  if(path.includes('/students/'))assert.equal(report.getWorksheet('Intentos y correcciones').rowCount,4);
  }
+ const patchStudent = (id, changes, cookie = cookieB) =>
+   request('/owner/students/'+id,{cookie,method:'PATCH',body:changes});
+ const login = (email, password) =>
+   request('/auth/login',{method:'POST',body:{email,password}});
+ assert.equal((await patchStudent(student.id,{active:false},cookie)).status,403);
+ const me = await (await request('/me',{cookie:cookieB})).json();
+ assert.equal((await patchStudent(me.user.id,{active:false})).status,403);
+ assert.equal((await patchStudent(student.id,{email:'not-an-email'})).status,400);
+ assert.equal((await patchStudent(student.id,{email:me.user.email})).status,409);
+ assert.equal((await patchStudent(student.id,{password:'short'})).status,400);
+ assert.equal((await patchStudent(student.id,{active:false})).status,200);
+ assert.equal((await request('/me',{cookie})).status,401);
+ assert.equal((await login(email,'integration-password')).status,401);
+ assert.equal((await patchStudent(student.id,{active:true})).status,200);
+ assert.equal((await request('/me',{cookie})).status,401);
+ const previousLogin = await login(email,'integration-password');
+ assert.equal(previousLogin.status,200);
+ const previousCookie = previousLogin.headers.get('set-cookie').split(';')[0];
+ const newEmail = 'edited-'+email;
+ assert.equal((await patchStudent(student.id,{email:newEmail.toUpperCase()})).status,200);
+ assert.equal((await request('/me',{cookie:previousCookie})).status,401);
+ assert.equal((await login(email,'integration-password')).status,401);
+ const renamedLogin = await login(newEmail,'integration-password');
+ assert.equal(renamedLogin.status,200);
+ const renamedCookie = renamedLogin.headers.get('set-cookie').split(';')[0];
+ assert.equal((await patchStudent(student.id,{password:'replacement-password'})).status,200);
+ assert.equal((await request('/me',{cookie:renamedCookie})).status,401);
+ assert.equal((await login(newEmail,'integration-password')).status,401);
+ const newLogin = await login(newEmail,'replacement-password');
+ assert.equal(newLogin.status,200);
+ const newCookie = newLogin.headers.get('set-cookie').split(';')[0];
+ assert.equal((await (await request('/me',{cookie:newCookie})).json()).progress[0].passed,true);
  await request('/logout',{cookie,method:'POST'});
  assert.equal((await request('/me',{cookie})).status,401);
  }finally{child.kill('SIGTERM');}

@@ -22,6 +22,27 @@ const activityName = {practice:'Práctica', short:'Examen corto', long:'Evaluaci
 const dateText = value => value ? new Date(value).toLocaleString('es-CO', {timeZone:'America/Bogota'}) : '—';
 const moduleTitle = id => modules.find(module => module.id === id)?.title ?? 'Módulo ' + id;
 
+const accountLabel = student => student.active ? 'Activa' : 'Inactiva';
+
+function accountControls(student) {
+  const label = accountLabel(student);
+  if (student.id === user.id) {
+    return '<section class="card account-tools"><h2>Cuenta del dueño</h2><p class="muted">Cuenta protegida.</p></section>';
+  }
+  const id = student.id;
+  return '<section class="card account-tools"><div class="row"><h2>Cuenta del alumno</h2>' +
+    '<span class="pill">' + label + '</span></div><div class="grid">' +
+    '<form id="student-email" data-target="' + id + '"><label>Correo de ingreso' +
+    '<input name="email" type="email" required maxlength="254" value="' + esc(student.email) + '"></label>' +
+    '<button>Guardar correo</button></form>' +
+    '<form id="student-password" data-target="' + id + '"><label>Nueva contraseña' +
+    '<input name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password"></label>' +
+    '<button>Restablecer contraseña</button></form></div>' +
+    '<p class="muted">Cambiar el correo o la contraseña cierra las sesiones del alumno.</p>' +
+    '<button data-account-target="' + id + '" data-account-next="' + !student.active + '">' +
+    (student.active ? 'Inactivar cuenta' : 'Reactivar cuenta') + '</button></section>';
+}
+
 function showOwnerSetup() {
   view('owner');
   $('#owner').innerHTML = '<div class="intro"><h1>Activa el acceso de dueño</h1></div>' +
@@ -36,20 +57,20 @@ async function showStudents(query = '', after = '', append = false) {
     const {students, next} = await api('/owner/students?' + params);
     if (!append) {
       view('owner');
-      $('#owner').innerHTML = '<div class="intro"><div class="row"><h1>Avance de alumnos</h1>' +
+      $('#owner').innerHTML = '<div class="intro"><div class="row"><h1>Usuarios y avance</h1>' +
         '<a class="button primary" href="/api/owner/report.xlsx">Descargar reporte general (.xlsx)</a></div></div>' +
         '<div class="card"><form id="owner-search" class="row"><label>Buscar por nombre o correo' +
         '<input name="query" type="search" maxlength="100" value="' + esc(query) + '"></label><button>Buscar</button></form>' +
-        '<div class="owner-table"><table><thead><tr><th>Alumno</th><th>Herramienta</th><th>Aprobados</th>' +
-        '<th>Última actividad</th><th>Informe</th></tr></thead><tbody id="student-rows"></tbody></table></div>' +
+        '<div class="owner-table"><table><thead><tr><th>Alumno</th><th>Herramienta</th><th>Cuenta</th><th>Aprobados</th>' +
+        '<th>Última actividad</th><th>Acciones</th></tr></thead><tbody id="student-rows"></tbody></table></div>' +
         '<div id="student-next"></div></div>';
     }
     const rows = students.map(student => '<tr><td><strong>' + esc(student.name) + '</strong><br><span class="muted">' +
       esc(student.email) + '</span></td><td>' + (student.tool === 'excel' ? 'Excel Online' : 'Google Sheets') +
-      '</td><td>' + student.approved + ' / 8</td><td>' + esc(dateText(student.lastActivity)) +
-      '</td><td><button data-student="' + student.id + '">Ver avance</button></td></tr>');
+      '</td><td><span class="pill">' + accountLabel(student) + '</span></td><td>' + student.approved + ' / 8</td><td>' + esc(dateText(student.lastActivity)) +
+      '</td><td><button data-student="' + student.id + '">Ver cuenta y avance</button></td></tr>');
     $('#student-rows').insertAdjacentHTML('beforeend', rows.join('') ||
-      (append ? '' : '<tr><td colspan="5">No hay alumnos que coincidan.</td></tr>'));
+      (append ? '' : '<tr><td colspan="6">No hay alumnos que coincidan.</td></tr>'));
     $('#student-next').innerHTML = next ? '<button data-student-page="' + next + '">Cargar más</button>' : '';
   } catch (err) { error(err); }
 }
@@ -66,7 +87,7 @@ async function showStudent(id, before = '', append = false) {
       $('#owner').innerHTML = '<button id="owner-back">← Alumnos</button><div class="row"><div><h1>' +
         esc(student.name) + '</h1><p>' + esc(student.email) + ' · ' + student.approved +
         ' de 8 módulos aprobados</p></div><a class="button primary" href="/api/owner/students/' + id +
-        '/report.xlsx">Descargar informe (.xlsx)</a></div><div class="card owner-table"><table><thead><tr>' +
+        '/report.xlsx">Descargar informe (.xlsx)</a></div>' + accountControls(student) + '<div class="card owner-table"><table><thead><tr>' +
         '<th>Módulo</th><th>Práctica</th><th>Corto</th><th>Evaluación</th><th>Nota final</th><th>Estado</th>' +
         '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div><h2>Intentos y correcciones</h2>' +
         '<div id="owner-attempts"></div><div id="owner-attempt-next"></div>';
@@ -84,6 +105,17 @@ async function showStudent(id, before = '', append = false) {
 document.addEventListener('click',async e=>{
  const b=e.target.closest('button');if(!b)return;
  if(b.id==='nav-owner'||b.id==='owner-back')await showStudents();
+ if(b.dataset.accountTarget){
+   const id=b.dataset.accountTarget;
+   const active=b.dataset.accountNext==='true';
+   if(!active&&!window.confirm('¿Inactivar esta cuenta? Se cerrarán sus sesiones y se conservará su avance.'))return;
+   b.disabled=true;
+   try{
+     await api('/owner/students/'+id,{method:'PATCH',body:JSON.stringify({active})});
+     await showStudent(id);
+     showAccountSuccess(active?'Cuenta reactivada.':'Cuenta inactivada.');
+   }catch(err){error(err);}finally{b.disabled=false;}
+ }
  if(b.dataset.student)await showStudent(b.dataset.student);
  if(b.dataset.studentPage||b.dataset.attemptPage){
    b.disabled=true;
@@ -98,9 +130,23 @@ document.addEventListener('click',async e=>{
  if(b.id==='nav-history'){if(!user)return view('auth');try{const rows=await api('/history');view('history');$('#history').innerHTML='<h1>Tu progreso, intento a intento.</h1>'+(rows.length?rows.map(r=>'<article class="card"><span class="pill">Módulo '+r.module+' · '+esc({practice:'Práctica',short:'Examen corto',long:'Evaluación de unidad'}[r.kind])+'</span><p class="muted">'+esc(new Date(r.created_at).toLocaleString('es-CO'))+'</p>'+reportHTML(r.feedback)+'</article>').join(''):'<p>Tus resultados aparecerán después de entregar tu primera actividad.</p>');}catch(e){error(e);}}
  if(b.dataset.exam){b.disabled=true;try{const data=await api('/modules/'+current.id+'/exam',{method:'POST',body:JSON.stringify({kind:b.dataset.exam})});$('#exam').innerHTML='<form id="exam-form" data-id="'+data.id+'">'+data.questions.map((q,i)=>'<fieldset><legend>'+esc(q.question)+'</legend>'+q.options.map((o,j)=>'<label><input type="radio" name="q'+i+'" value="'+j+'" required>'+esc(o)+'</label>').join('')+'</fieldset>').join('')+'<button class="primary">Entregar respuestas</button></form>';$('#exam-form').dataset.count=data.questions.length;}catch(e){error(e);}finally{b.disabled=false;}}
 });
+function showAccountSuccess(message) {
+  $('#notice').className='good';
+  $('#notice').textContent=message;
+}
+
 document.addEventListener('submit',async e=>{
  e.preventDefault();const form=e.target;const btn=form.querySelector('button');btn.disabled=true;$('#notice').textContent='';
  try{
+ if(form.id==='student-email'||form.id==='student-password'){
+   const field=form.id==='student-email'?'email':'password';
+   const id=form.dataset.target;
+   const value=new FormData(form).get(field);
+   await api('/owner/students/'+id,{method:'PATCH',body:JSON.stringify({[field]:value})});
+   form.reset();
+   await showStudent(id);
+   showAccountSuccess(field==='email'?'Correo de ingreso guardado.':'Contraseña restablecida.');
+ }
  if(form.id==='owner-claim'){
    const token=new FormData(form).get('token').trim();
    await api('/owner/claim',{method:'POST',body:JSON.stringify({token})});

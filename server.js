@@ -1,12 +1,13 @@
 import {mountOwner, ownerStatus, progressFromScores} from './owner.js';
 import {explainPractice, tutorConfigured} from './tutor.js';
+import {hashPassword, loginEmail, validPassword, verifyPassword} from './accounts.js';
 import express from 'express';
 import pg from 'pg';
 import ExcelJS from 'exceljs';
 import multer from 'multer';
 import helmet from 'helmet';
 import {rateLimit} from 'express-rate-limit';
-import {randomBytes,scryptSync,timingSafeEqual,createHash} from 'node:crypto';
+import {randomBytes,createHash} from 'node:crypto';
 import yauzl from 'yauzl';
 import {modules} from './course.js';
 import {gradeChecks} from './grading.js';
@@ -18,6 +19,7 @@ app.use(helmet()); app.use(express.json({limit:'32kb'}));
 app.use('/api',rateLimit({windowMs:60000,limit:90}));
 app.use((req,res,next)=>{if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.headers.origin!==origin)return res.status(403).json({error:'Origen no permitido'});next();});
 await db.query(`CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,email TEXT UNIQUE NOT NULL,name TEXT NOT NULL,password TEXT NOT NULL,tool TEXT NOT NULL);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,expires TIMESTAMPTZ NOT NULL);
 CREATE TABLE IF NOT EXISTS attempts(id SERIAL PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,module INT NOT NULL,kind TEXT NOT NULL,score NUMERIC NOT NULL,feedback JSONB NOT NULL,created_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE IF NOT EXISTS challenges(id TEXT PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,module INT NOT NULL,kind TEXT NOT NULL,answers JSONB NOT NULL,expires TIMESTAMPTZ NOT NULL);
@@ -27,29 +29,41 @@ const hash=s=>createHash('sha256').update(s).digest('hex');
 const safeUser=u=>({id:u.id,name:u.name,email:u.email,tool:u.tool});
 const authLimit=rateLimit({windowMs:15*60000,limit:20});
 app.post('/api/auth/:action',authLimit,async(req,res)=>{
- const {action}=req.params;const {email,password,name,tool}=req.body;
+ const {action}=req.params;
+ const {email: rawEmail,password,name,tool}=req.body ?? {};
  if(!['register','login'].includes(action))return res.sendStatus(404);
- if(typeof email!=='string'||!/^\S+@\S+\.\S+$/.test(email)||email.length>254||typeof password!=='string'||password.length<10||password.length>128)return res.status(400).json({error:'Usa un correo válido y una contraseña de 10 a 128 caracteres.'});
+ const email=loginEmail(rawEmail);
+ if(!email||!validPassword(password))return res.status(400).json({error:'Usa un correo válido y una contraseña de 10 a 128 caracteres.'});
  let u;
  if(action==='register'){
- if(typeof name!=='string'||!name.trim()||name.length>80||!['excel','sheets'].includes(tool))return res.status(400).json({error:'Completa nombre y herramienta.'});
- const salt=randomBytes(16).toString('hex'), digest=scryptSync(password,salt,64).toString('hex');
- try{u=(await db.query('INSERT INTO users(email,name,password,tool) VALUES($1,$2,$3,$4) RETURNING *',[email.toLowerCase().trim(),name.trim(),salt+':'+digest,tool])).rows[0];}catch(e){if(e.code==='23505')return res.status(409).json({error:'No se pudo registrar ese correo. Intenta iniciar sesión.'});throw e;}
+   if(typeof name!=='string'||!name.trim()||name.length>80||!['excel','sheets'].includes(tool))return res.status(400).json({error:'Completa nombre y herramienta.'});
+   try{
+     u=(await db.query('INSERT INTO users(email,name,password,tool) VALUES($1,$2,$3,$4) RETURNING *',
+       [email,name.trim(),hashPassword(password),tool])).rows[0];
+   }catch(e){
+     if(e.code==='23505')return res.status(409).json({error:'No se pudo registrar ese correo. Intenta iniciar sesión.'});
+     throw e;
+   }
  }else{
- u=(await db.query('SELECT * FROM users WHERE email=$1',[email.toLowerCase().trim()])).rows[0];
- const [salt,digest]=(u?.password||'0000000000000000:'+('0'.repeat(128))).split(':');
- const valid=timingSafeEqual(scryptSync(password,salt,64),Buffer.from(digest,'hex'));
- if(!u||!valid)return res.status(401).json({error:'Correo o contraseña incorrectos.'});
+   u=(await db.query('SELECT * FROM users WHERE email=$1',[email])).rows[0];
+   const valid=verifyPassword(password,u?.password);
+   if(!valid||!u?.active)return res.status(401).json({error:'Correo o contraseña incorrectos, o cuenta inactiva.'});
  }
  const token=randomBytes(32).toString('hex');
- await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')",[hash(token),u.id]);
+ // Lock and recheck credentials so a concurrent owner edit cannot leave an old session active.
+ const session=await db.query(`
+   INSERT INTO sessions(token,user_id,expires)
+   SELECT $1,id,now()+interval '7 days' FROM users
+   WHERE id=$2 AND active AND password=$3 AND email=$4 FOR UPDATE`,
+   [hash(token),u.id,u.password,u.email]);
+ if(!session.rowCount)return res.status(401).json({error:'La cuenta cambió. Intenta iniciar sesión nuevamente.'});
  res.cookie('session',token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',maxAge:604800000,path:'/'});
  res.json(safeUser(u));
 });
 app.use('/api',async(req,res,next)=>{
  const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('session='))?.slice(8);
  if(!token)return res.status(401).json({error:'Inicia sesión.'});
- req.user=(await db.query('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=$1 AND s.expires>now()',[hash(token)])).rows[0];
+ req.user=(await db.query('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=$1 AND s.expires>now() AND u.active',[hash(token)])).rows[0];
  if(!req.user)return res.status(401).json({error:'La sesión expiró.'});req.token=token;next();
 });
 async function state(uid){

@@ -3,6 +3,7 @@ import {rateLimit} from 'express-rate-limit';
 import ExcelJS from 'exceljs';
 import {modules} from './course.js';
 import {moduleGrade} from './grading.js';
+import {hashPassword, loginEmail, validPassword} from './accounts.js';
 
 const pageSize = 40;
 const activityNames = {practice: 'Práctica', short: 'Examen corto', long: 'Evaluación de unidad'};
@@ -21,7 +22,7 @@ export async function ownerStatus(db, userId) {
 }
 
 const studentsQuery = `
-  SELECT id,name,email,tool FROM users
+  SELECT id,name,email,tool,active FROM users
   WHERE id > $1 AND ($2 = '' OR position(lower($2) in lower(name)) > 0 OR position(lower($2) in lower(email)) > 0)
   ORDER BY id LIMIT $3`;
 const scoresQuery = `
@@ -53,7 +54,7 @@ function reportSheet(workbook, name, columns) {
 }
 
 const progressColumns = [
-  ['Nombre', 28], ['Correo', 35], ['Herramienta', 20], ['Módulos aprobados', 23], ['Última actividad UTC', 27],
+  ['Nombre', 28], ['Correo', 35], ['Herramienta', 20], ['Módulos aprobados', 23], ['Última actividad UTC', 27], ['Cuenta', 15],
   ...modules.map(({id}) => ['Módulo ' + id + ' / 100', 20])
 ];
 function iso(date) {
@@ -63,7 +64,7 @@ function iso(date) {
 function addSummary(sheet, student) {
   sheet.addRow([
     student.name, student.email, student.tool === 'excel' ? 'Excel Online' : 'Google Sheets',
-    student.approved, iso(student.lastActivity), ...student.progress.map(module => module.score)
+    student.approved, iso(student.lastActivity), student.active ? 'Activa' : 'Inactiva', ...student.progress.map(module => module.score)
   ]).commit();
 }
 
@@ -119,10 +120,59 @@ export function mountOwner(app, db) {
   });
 
   app.use('/api/owner/students/:id', async (req, res, next) => {
-    const {rows: [student]} = await db.query('SELECT id,name,email,tool FROM users WHERE id=$1', [cursor(req.params.id)]);
+    const {rows: [student]} = await db.query('SELECT id,name,email,tool,active FROM users WHERE id=$1', [cursor(req.params.id)]);
     if (!student) return res.status(404).json({error: 'No encontramos al alumno.'});
     req.student = student;
     next();
+  });
+
+  app.patch('/api/owner/students/:id', async (req, res) => {
+    if (req.student.id === req.user.id) {
+      return res.status(403).json({error: 'La cuenta del dueño está protegida en este panel.'});
+    }
+    const body = req.body;
+    if (!body || Array.isArray(body) || typeof body !== 'object' ||
+        !Object.keys(body).length || Object.keys(body).some(key => !['email', 'password', 'active'].includes(key))) {
+      return res.status(400).json({error: 'Indica qué dato de la cuenta quieres cambiar.'});
+    }
+
+    const email = Object.hasOwn(body, 'email') ? loginEmail(body.email) : null;
+    if (Object.hasOwn(body, 'email') && !email) {
+      return res.status(400).json({error: 'El usuario debe ser un correo válido.'});
+    }
+    if (Object.hasOwn(body, 'password') && !validPassword(body.password)) {
+      return res.status(400).json({error: 'La contraseña debe tener entre 10 y 128 caracteres.'});
+    }
+    if (Object.hasOwn(body, 'active') && typeof body.active !== 'boolean') {
+      return res.status(400).json({error: 'El estado de la cuenta no es válido.'});
+    }
+
+    const password = Object.hasOwn(body, 'password') ? hashPassword(body.password) : null;
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      const {rows: [previous]} = await client.query('SELECT email,active FROM users WHERE id=$1 FOR UPDATE', [req.student.id]);
+      if (!previous) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({error: 'No encontramos al alumno.'});
+      }
+      const {rows: [student]} = await client.query(
+        `UPDATE users SET email=COALESCE($2,email), password=COALESCE($3,password), active=COALESCE($4,active)
+         WHERE id=$1 RETURNING id,name,email,tool,active`,
+        [req.student.id, email, password, body.active ?? null]
+      );
+      if (student.email !== previous.email || password || !student.active) {
+        await client.query('DELETE FROM sessions WHERE user_id=$1', [student.id]);
+      }
+      await client.query('COMMIT');
+      res.json({student});
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (error.code === '23505') return res.status(409).json({error: 'Ese correo ya está en uso.'});
+      throw error;
+    } finally {
+      client.release();
+    }
   });
 
   app.get('/api/owner/students/:id', async (req, res) => {
