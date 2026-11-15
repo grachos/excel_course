@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {moduleGrade,gradeChecks} from '../grading.js';
+import {modules} from '../course.js';
+test('each module requires all three activities',()=>assert.equal(moduleGrade({practice:100,short:100},1).passed,false));
+test('80 passes and 79.9 does not',()=>{assert.equal(moduleGrade({practice:80,short:80,long:80},1).passed,true);assert.equal(moduleGrade({practice:79.9,short:79.9,long:79.9},1).passed,false);});
+test('final project cannot be compensated',()=>assert.equal(moduleGrade({practice:100,short:100,long:75},8).passed,false));
+test('numeric strings are not accepted as numeric cells',()=>assert.equal(gradeChecks([{cell:'B2',expected:3,points:100,hint:'Use a number'}],{B2:'3'}).score,0));
+test('correct alternate calculation results accepted',()=>assert.equal(gradeChecks([{cell:'B2',expected:3,points:100,hint:''}],{B2:6/2}).score,100));
+test('all eight rubrics total 100',()=>{assert.equal(modules.length,8);for(const m of modules){assert.equal(m.checks.reduce((s,c)=>s+c.points,0),100);assert.equal(gradeChecks(m.checks,Object.fromEntries(m.checks.map(c=>[c.cell,c.expected]))).score,100);}});
+test('missing answers cannot earn points',()=>assert.equal(gradeChecks(modules[0].checks,{}).score,0));
