@@ -45,7 +45,7 @@ function studyPlan(module, result) {
   const final=module.id===8;
   const practice=final?'proyecto final':'práctica';
   const assessment=final?'examen final':'evaluación de unidad';
-  if (passed) {
+  if (passed && !result.blocks?.long) {
     return {summary:'Módulo aprobado con '+scoreText(result.score)+'.',items:[]};
   }
 
@@ -59,7 +59,7 @@ function studyPlan(module, result) {
     add('Mejora el proyecto final.','Tu mejor nota es '+scoreText(scores.practice)+'. Necesitas al menos 80/100 en el proyecto.','lesson-practice');
   }
 
-  if (!Number.isFinite(scores.short)) {
+  if (result.blocks?.long || !Number.isFinite(scores.short)) {
     module.parts.forEach((part,index)=>{
       if (!Number.isFinite(scores[part.kind]) && !result.blocks?.[part.kind]) {
         add('Presenta el examen de la parte '+(index+1)+'.',part.title+'. El promedio de las partes vale el 20 %.','lesson-part-'+(index+1));
@@ -149,7 +149,7 @@ function lesson(id) {
     : 'Importa la plantilla en Google Sheets. Al terminar, usa Archivo → Descargar → Microsoft Excel (.xlsx).';
 
   $('#lesson').innerHTML='<button id="back">← '+(ownerAccess?'Revisar el curso':'Mi curso')+'</button>' +
-    '<div class="lesson-body">'+(ownerAccess?'<p class="pill">Modo de revisión · Resultado de prueba</p>':'') +
+    '<div class="lesson-body">'+(ownerAccess?'<p class="pill">Modo de revisión · Resultado de prueba. El examen exige completar las tres partes y entregar la práctica.</p>':'') +
     '<p class="eyebrow">MÓDULO '+m.id+' · '+esc(m.level)+'</p><h1>'+esc(m.title)+'</h1><p>'+esc(m.goal)+'</p>' +
     '<span class="pill">'+(user.tool==='excel'?'Ruta Excel Online':'Ruta Google Sheets')+'</span>' +
     '<p class="muted">En cada parte, revisa el ejemplo visual antes de presentar su examen.</p>' +

@@ -87,9 +87,9 @@ app.get('/api/history',async(req,res)=>res.json((await db.query('SELECT id,modul
 app.use('/api/modules/:id',async(req,res,next)=>{
  req.module=modules[Number(req.params.id)-1];
  if(!req.module)return res.sendStatus(404);
- if(req.user.is_owner)return next();
  const progress=await state(req.user);
  req.moduleProgress=progress[req.module.id-1];
+ if(req.user.is_owner)return next();
  const prerequisite=progress.slice(0,req.module.id-1).find(module=>!module.passed);
  if(prerequisite){
    return res.status(403).json({error:'Para abrir el módulo '+req.module.id+', aprueba primero el módulo '+prerequisite.id+' con al menos 80/100.'});

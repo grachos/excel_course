@@ -52,10 +52,10 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  if(kind==='long'){
    const lockedExam=await examOf('long');
    assert.equal(lockedExam.status,403);
-   assert.match((await lockedExam.json()).error,/Primero entrega la práctica/);
+   assert.match((await lockedExam.json()).error,/entrega de la práctica/);
    const statusBeforePractice=await (await request('/me',{cookie,clientAddress:sequenceIp})).json();
    assert.equal(statusBeforePractice.progress[0].blocks.practice,undefined);
-   assert.match(statusBeforePractice.progress[0].blocks.long,/Primero entrega la práctica/);
+   assert.match(statusBeforePractice.progress[0].blocks.long,/entrega de la práctica/);
    const uploaded=await request('/modules/1/practice',{cookie,method:'POST',body:form,raw:true});assert.equal(uploaded.status,200);assert.equal((await uploaded.json()).score,100);
  }
  const exam=await(await request('/modules/1/exam',{cookie,method:'POST',body:{kind}})).json();
@@ -96,7 +96,7 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal(initialFinal.attemptsUsed,0);
  assert.equal(initialFinal.attemptsRemaining,3);
  assert.equal(initialFinal.projectScore,null);
- assert.equal((await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind:'long'}})).status,400);
+ assert.equal((await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind:'long'}})).status,403);
  const practiceBook = new ExcelJS.Workbook();
  const practiceSheet = practiceBook.addWorksheet('Entrega');
  for (const {cell,expected} of modules[7].checks) practiceSheet.getCell(cell).value = expected;
@@ -105,6 +105,12 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const preview = await request('/modules/8/practice',{cookie:cookieB,method:'POST',body:ownerPractice,raw:true});
  assert.equal(preview.status,200);
  assert.equal((await preview.json()).score,100);
+ // Owner can inspect every module, but cannot skip prerequisites to start any unit exam.
+ for (const {id} of modules) {
+   const blocked = await request('/modules/'+id+'/exam',{cookie:cookieB,method:'POST',clientAddress:sequenceIp,body:{kind:'long'}});
+   assert.equal(blocked.status,403);
+   assert.match((await blocked.json()).error,/parte 1.*parte 2.*parte 3/);
+ }
  for (const kind of [...partKinds,'long']) {
    const exam = await (await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind}})).json();
    assert.equal(exam.questions.length,kind==='long'?16:3);

@@ -1,20 +1,29 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {activityBlocks} from '../activity-sequence.js';
-
-test('a student must complete each part in order before practice and unit assessment', () => {
- const one={id:1,passed:false,scores:{'part:1':55}};
- assert.match(activityBlocks(one)['part:3'],/parte 2/);
- assert.match(activityBlocks(one).practice,/parte 2/);
- assert.equal(activityBlocks(one)['part:2'],undefined);
- assert.match(activityBlocks({...one,scores:{short:70}}).long,/entrega la práctica/);
- assert.deepEqual(activityBlocks({...one,scores:{short:70,practice:10}}),{});
-});
-
-test('the final requires an approved project for students and a submitted project in owner preview', () => {
- const student={id:8,passed:false,scores:{short:100,practice:79}};
- assert.match(activityBlocks(student).long,/80\/100/);
- assert.deepEqual(activityBlocks({...student,scores:{short:100,practice:80}}),{});
- assert.deepEqual(activityBlocks(student,true),{});
- assert.match(activityBlocks({...student,scores:{}},true).long,/proyecto final de prueba/);
+const completed = {'part:1':100,'part:2':100,'part:3':100,practice:100};
+for (const owner of [false,true]) {
+  for (let id=1;id<=8;id++) {
+    test('module '+id+' enforces every assessment prerequisite; owner='+owner, () => {
+      for (const absent of Object.keys(completed)) {
+        const scores={...completed,short:100,long:100};
+        delete scores[absent];
+        const result=activityBlocks({id,passed:true,scores},owner);
+        assert.match(result.long,/Examen bloqueado/);
+        assert.match(result.long,absent==='practice'?/entrega/:new RegExp('parte '+absent.split(':')[1]));
+      }
+      assert.equal(activityBlocks({id,scores:completed},owner).long,undefined);
+      assert.match(activityBlocks({id,scores:{short:100,practice:100}},owner).long,/parte 1.*parte 2.*parte 3/);
+    });
+  }
+  test('final project must reach 80 even in preview; owner='+owner,()=>{
+    assert.match(activityBlocks({id:8,scores:{...completed,practice:79}},owner).long,/80\/100/);
+    assert.equal(activityBlocks({id:8,scores:{...completed,practice:80}},owner).long,undefined);
+  });
+}
+test('student parts and practice retain their sequence',()=>{
+ const blocks=activityBlocks({id:1,scores:{'part:1':55}});
+ assert.match(blocks['part:3'],/parte 2/);
+ assert.match(blocks.practice,/parte 2/);
+ assert.equal(blocks['part:2'],undefined);
 });
