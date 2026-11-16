@@ -22,7 +22,7 @@ function showReviewModules() {
 }
 function lesson(id){
  current=modules.find(m=>m.id===id);view('lesson');const m=current,p=progress[id-1];
- $('#lesson').innerHTML='<button id="back">← '+(ownerAccess?'Revisar el curso':'Mi curso')+'</button><div class="lesson-body">'+(ownerAccess?'<p class="pill">Modo de revisión · Resultado de prueba</p>':'')+'<p class="eyebrow">MÓDULO '+m.id+' · '+esc(m.level)+'</p><h1>'+esc(m.title)+'</h1><p>'+esc(m.goal)+'</p><span class="pill">'+(user.tool==='excel'?'Ruta Excel Online':'Ruta Google Sheets')+'</span><div class="card"><h2>01 · Comprende y prueba</h2>'+m.guide.map(t=>'<p>'+esc(t)+'</p>').join('')+'<p class="muted">Distribución sugerida: 5 min objetivo, 10 min ejemplo, 15 min práctica, 5 min examen corto, 20 min evaluación y 5 min repaso.</p></div><div class="card"><h2>02 · Manos a la hoja</h2><p>'+esc(m.task)+'</p><p>'+(user.tool==='excel'?'Descarga la plantilla, ábrela en Excel Online y guarda una copia XLSX después de recalcular.':'Descarga la plantilla e impórtala en Google Sheets. Al terminar usa Archivo → Descargar → Microsoft Excel (.xlsx).')+'</p><a class="button primary" href="/api/modules/'+m.id+'/template">↓ Descargar plantilla</a><form id="practice"><label>Entrega tu práctica · XLSX, máximo 2 MB<input type="file" name="file" accept=".xlsx" required></label><button class="primary">Revisar mi práctica</button></form><p class="muted">Revisión inicial de resultados guardados. Gráficos, formato y procedimiento requieren revisión adicional. La IA explica los hallazgos si está configurada; de lo contrario se muestran correcciones por reglas.</p><div id="practice-report"></div></div><div class="card"><h2>03 · Demuestra lo aprendido</h2><p>Examen corto: 2 preguntas. Evaluación de unidad: 4 preguntas. Banco inicial; se ampliará antes del lanzamiento.</p><button data-exam="short">Examen corto · 20%</button> <button data-exam="long">Evaluación de unidad · 50%</button><p class="muted">Práctica: '+(p.scores.practice??'—')+' · Corto: '+(p.scores.short??'—')+' · Unidad: '+(p.scores.long??'—')+'</p><div id="exam"></div></div></div>';
+ $('#lesson').innerHTML='<button id="back">← '+(ownerAccess?'Revisar el curso':'Mi curso')+'</button><div class="lesson-body">'+(ownerAccess?'<p class="pill">Modo de revisión · Resultado de prueba</p>':'')+'<p class="eyebrow">MÓDULO '+m.id+' · '+esc(m.level)+'</p><h1>'+esc(m.title)+'</h1><p>'+esc(m.goal)+'</p><span class="pill">'+(user.tool==='excel'?'Ruta Excel Online':'Ruta Google Sheets')+'</span><div class="card"><h2>01 · Comprende y prueba</h2>'+m.guide.map(t=>'<p>'+esc(t)+'</p>').join('')+'<p class="muted">Distribución sugerida: 5 min objetivo, 10 min ejemplo, 15 min práctica, 5 min examen corto, 20 min evaluación y 5 min repaso.</p></div><div class="card"><h2>02 · Manos a la hoja</h2><p>'+esc(m.task)+'</p><p>'+(user.tool==='excel'?'Descarga la plantilla, ábrela en Excel Online y guarda una copia XLSX después de recalcular.':'Descarga la plantilla e impórtala en Google Sheets. Al terminar usa Archivo → Descargar → Microsoft Excel (.xlsx).')+'</p><button type="button" class="primary" data-template="'+m.id+'">↓ Descargar plantilla</button><p id="template-status" class="muted" role="status"></p><form id="practice"><label>Entrega tu práctica · XLSX, máximo 2 MB<input type="file" name="file" accept=".xlsx" required></label><button class="primary">Revisar mi práctica</button></form><p class="muted">Revisión inicial de resultados guardados. Gráficos, formato y procedimiento requieren revisión adicional. La IA explica los hallazgos si está configurada; de lo contrario se muestran correcciones por reglas.</p><div id="practice-report"></div></div><div class="card"><h2>03 · Demuestra lo aprendido</h2><p>Examen corto: 2 preguntas. Evaluación de unidad: 4 preguntas. Banco inicial; se ampliará antes del lanzamiento.</p><button data-exam="short">Examen corto · 20%</button> <button data-exam="long">Evaluación de unidad · 50%</button><p class="muted">Práctica: '+(p.scores.practice??'—')+' · Corto: '+(p.scores.short??'—')+' · Unidad: '+(p.scores.long??'—')+'</p><div id="exam"></div></div></div>';
 }
 function reportHTML(r){return '<div class="feedback"><h3>'+r.score+'/100 · '+(r.score>=80?'Meta alcanzada':'Sigue practicando')+'</h3>'+(r.mode?'<span class="pill">'+(r.mode==='ai'?'Explicación con IA':'Corrección automática por reglas')+'</span>':'')+r.details.map(d=>'<p class="'+(d.ok?'good':'bad')+'">'+(d.ok?'✓ ':'↳ ')+esc(d.cell||d.question)+': '+esc(d.message)+'</p>').join('')+(r.tutor?'<p>'+esc(r.tutor)+'</p>':'')+(r.note?'<p class="muted">'+esc(r.note)+'</p>':'')+'</div>';}
 const activityName = {practice:'Práctica', short:'Examen corto', long:'Evaluación de unidad'};
@@ -109,8 +109,60 @@ async function showStudent(id, before = '', append = false) {
   } catch (err) { error(err); }
 }
 
+const templateDownloads = new Set();
+const templateType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+async function downloadTemplate(button) {
+  const moduleId = button.dataset.template;
+  if (templateDownloads.has(moduleId)) return;
+
+  templateDownloads.add(moduleId);
+  button.disabled = true;
+  const label = button.textContent;
+  const status = document.querySelector('#template-status');
+  button.textContent = 'Preparando plantilla…';
+  status.textContent = '';
+
+  try {
+    const response = await fetch('/api/modules/' + moduleId + '/template', {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(30000)
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.error || 'No se pudo descargar la plantilla. Intenta nuevamente.');
+    }
+    if (response.headers.get('content-type')?.split(';')[0] !== templateType) {
+      throw new Error('El servidor no devolvió una plantilla de Excel.');
+    }
+    const file = await response.blob();
+    if (!file.size) throw new Error('La plantilla está vacía. Intenta nuevamente.');
+
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(file);
+    try {
+      link.href = url;
+      link.download = 'practica-' + moduleId + '.xlsx';
+      link.hidden = true;
+      document.body.append(link);
+      link.click();
+      status.textContent = 'Plantilla enviada a las descargas del navegador.';
+    } finally {
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+  } catch (err) {
+    status.textContent = err.name === 'TimeoutError' ? 'La plantilla tardó demasiado. Intenta nuevamente.' : err.message;
+  } finally {
+    templateDownloads.delete(moduleId);
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
 document.addEventListener('click',async e=>{
  const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.template)return downloadTemplate(b);
  if(b.id==='nav-owner'||b.id==='owner-back')await showStudents();
  if(b.dataset.accountTarget){
    const id=b.dataset.accountTarget;

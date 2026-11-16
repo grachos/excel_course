@@ -89,7 +89,11 @@ app.get('/api/modules/:id/template',async(req,res)=>{
  const w=new ExcelJS.Workbook();const guide=w.addWorksheet('Guía');guide.getCell('A1').value=req.module.title;guide.getCell('A2').value=req.module.task;guide.getColumn(1).width=100;guide.getCell('A2').alignment={wrapText:true};guide.getRow(2).height=100;
  const s=w.addWorksheet('Entrega');for(const c of req.module.checks){s.getCell(c.cell).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE7F4ED'}};}
  for(let i=1;i<=8;i++)s.getColumn(i).width=20;
- res.set('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');res.set('Content-Disposition','attachment; filename="practica-'+req.module.id+'.xlsx"');res.send(Buffer.from(await w.xlsx.writeBuffer()));
+ const buffer = Buffer.from(await w.xlsx.writeBuffer());
+ res.set('Cache-Control', 'private, no-store');
+ res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ res.attachment('practica-' + req.module.id + '.xlsx');
+ res.send(buffer);
 });
 function zipSafe(buffer){return new Promise((resolve,reject)=>yauzl.fromBuffer(buffer,{lazyEntries:true},(err,z)=>{
  if(err)return reject(Error('Archivo XLSX inválido.'));

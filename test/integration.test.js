@@ -29,7 +29,14 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal((await submit.json()).score,100);
  assert.equal((await request('/modules/1/exam/submit',{cookie,method:'POST',body:{id:exam.id,answers}})).status,400);
  }
- assert.equal((await request('/modules/2/template',{cookie})).status,200);
+ const template = await request('/modules/2/template',{cookie});
+ assert.equal(template.status,200);
+ assert.match(template.headers.get('content-type'),/^application\/vnd\.openxmlformats/);
+ assert.match(template.headers.get('content-disposition'),/attachment; filename="practica-2\.xlsx"/);
+ assert.equal(template.headers.get('cache-control'),'private, no-store');
+ const templateBook = new ExcelJS.Workbook();
+ await templateBook.xlsx.load(Buffer.from(await template.arrayBuffer()));
+ assert.ok(templateBook.getWorksheet('Entrega'));
  const b=await request('/auth/register',{method:'POST',body:{email:'other-'+email,password:'integration-password',name:'Luis',tool:'sheets'}});
  const cookieB=b.headers.get('set-cookie').split(';')[0];
  assert.deepEqual(await(await request('/history',{cookie:cookieB})).json(),[]);
