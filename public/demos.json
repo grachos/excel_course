@@ -1,6 +1,51 @@
 [
   {
     "id": 1,
+    "part": 1,
+    "title": "Abre una hoja y ubica un rango",
+    "headers": [
+      "Concepto",
+      "Importe"
+    ],
+    "rows": [
+      [
+        "Transporte",
+        12500
+      ],
+      [
+        "Almuerzo",
+        18000
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "A2",
+        "action": "Selecciona A2",
+        "note": "La letra A señala la columna de conceptos. El número 2 corresponde a la fila de Transporte.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B2",
+        "action": "Selecciona B2",
+        "note": "B2 está en la misma fila que A2, pero en la columna que guarda el importe.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "A1",
+        "action": "Selecciona el rango A1:B3",
+        "note": "El rango incluye las seis celdas entre ambas esquinas, incluyendo los encabezados.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      }
+    ]
+  },
+  {
+    "id": 1,
     "title": "De una cifra a un gasto en pesos",
     "headers": [
       "Concepto",
@@ -35,6 +80,99 @@
         "note": "Aplica formato Moneda. El valor guardado sigue siendo 12000.",
         "updates": {
           "B2": "$12.000"
+        },
+        "hidden": [],
+        "bars": []
+      }
+    ],
+    "part": 2
+  },
+  {
+    "id": 1,
+    "part": 3,
+    "title": "Separa conceptos e importes",
+    "headers": [
+      "Concepto",
+      "Importe",
+      "Total"
+    ],
+    "rows": [
+      [
+        "Taxi 12500"
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "A2",
+        "action": "Separa los dos datos",
+        "note": "Un texto como Taxi 12500 mezcla una etiqueta y una cantidad, y dificulta los cálculos.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B2",
+        "action": "Una columna por campo",
+        "note": "Deja Taxi en A2 y escribe 12500 como número en B2.",
+        "updates": {
+          "A2": "Taxi",
+          "B2": 12500
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "C2",
+        "action": "=SUMA(B2:B3)",
+        "note": "Con dos viajes en filas distintas puedes sumar ambos importes.",
+        "updates": {
+          "A3": "Bus",
+          "B3": 3200,
+          "C2": 15700
+        },
+        "hidden": [],
+        "bars": []
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "part": 1,
+    "title": "Calcula un precio con descuento",
+    "headers": [
+      "Precio",
+      "Descuento (%)",
+      "Precio final"
+    ],
+    "rows": [
+      [
+        300,
+        20
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "A2",
+        "action": "Identifica el precio original",
+        "note": "El precio está en A2. El descuento en B2 es el número 20.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B2",
+        "action": "20 / 100 equivale a 0,20",
+        "note": "Divide por 100 para convertir el número 20 a una proporción.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "C2",
+        "action": "=A2*(1-B2/100)",
+        "note": "Los paréntesis aseguran que se aplique el descuento antes de multiplicar por el precio.",
+        "updates": {
+          "C2": 240
         },
         "hidden": [],
         "bars": []
@@ -96,11 +234,61 @@
         "hidden": [],
         "bars": []
       }
+    ],
+    "part": 2
+  },
+  {
+    "id": 2,
+    "part": 3,
+    "title": "Corrige una referencia que se movió",
+    "headers": [
+      "Subtotal",
+      "Impuesto",
+      "Tasa"
+    ],
+    "rows": [
+      [
+        1000,
+        190,
+        "19%"
+      ],
+      [
+        2000,
+        0
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "B2",
+        "action": "=A2*C2",
+        "note": "La primera fila calcula 190 y parece correcta.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B3",
+        "action": "=A3*C3",
+        "note": "Al copiar, la referencia pasó de C2 a C3. Como C3 está vacía, el importe es cero.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B3",
+        "action": "=A3*$C$2",
+        "note": "Fija la tasa y vuelve a copiar. Ahora la segunda fila calcula 380.",
+        "updates": {
+          "B3": 380
+        },
+        "hidden": [],
+        "bars": []
+      }
     ]
   },
   {
     "id": 3,
-    "title": "Resume pedidos con funciones",
+    "title": "Suma unidades sin duplicar un subtotal",
     "headers": [
       "Pedido",
       "Unidades",
@@ -111,46 +299,218 @@
       [
         "A",
         12,
-        "Suma"
+        "Total"
       ],
       [
         "B",
-        18,
-        "Promedio"
+        18
       ],
       [
         "C",
-        30,
-        "Máximo"
+        30
       ]
     ],
     "steps": [
       {
+        "cell": "B2",
+        "action": "Identifica los registros en B2:B4",
+        "note": "El rango contiene tres pedidos individuales: 12, 18 y 30 unidades.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
         "cell": "D2",
         "action": "=SUMA(B2:B4)",
-        "note": "Suma las tres filas: 12 + 18 + 30.",
+        "note": "Al reunir las tres filas obtienes 60 unidades.",
         "updates": {
-          "D2": "60"
+          "D2": 60
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B5",
+        "action": "Mantén el subtotal fuera de la suma",
+        "note": "Si agregas una fila Total, déjala fuera del rango B2:B4. De otro modo contarías las mismas unidades dos veces.",
+        "updates": {
+          "A5": "Subtotal",
+          "B5": 60
+        },
+        "hidden": [],
+        "bars": []
+      }
+    ],
+    "part": 1
+  },
+  {
+    "id": 3,
+    "part": 2,
+    "title": "Compara vacío con cero en un promedio",
+    "headers": [
+      "Día",
+      "Ventas",
+      "Promedio"
+    ],
+    "rows": [
+      [
+        "Lunes",
+        10
+      ],
+      [
+        "Martes"
+      ],
+      [
+        "Miércoles",
+        20
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "B3",
+        "action": "Deja B3 vacía",
+        "note": "Martes aún no reporta. Solo hay dos números en la fuente.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "C2",
+        "action": "=PROMEDIO(B2:B4)",
+        "note": "La hoja divide 30 entre dos valores numéricos.",
+        "updates": {
+          "C2": 15
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B3",
+        "action": "Registra un cero confirmado",
+        "note": "Ahora hay tres observaciones. La misma fórmula divide 30 entre tres.",
+        "updates": {
+          "B3": 0,
+          "C2": 10
+        },
+        "hidden": [],
+        "bars": []
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "part": 3,
+    "title": "Encuentra extremos sin ordenar",
+    "headers": [
+      "Venta",
+      "Importe",
+      "Indicador",
+      "Resultado"
+    ],
+    "rows": [
+      [
+        "V01",
+        9,
+        "Mínimo"
+      ],
+      [
+        "V02",
+        12,
+        "Máximo"
+      ],
+      [
+        "V03",
+        44
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "B2",
+        "action": "Ubica los importes",
+        "note": "Los importes están en B2:B4. No hace falta reordenarlos.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "D2",
+        "action": "=MIN(B2:B4)",
+        "note": "La menor venta es 9.",
+        "updates": {
+          "D2": 9
         },
         "hidden": [],
         "bars": []
       },
       {
         "cell": "D3",
-        "action": "=PROMEDIO(B2:B4)",
-        "note": "El promedio de los tres pedidos es 20.",
+        "action": "=MAX(B2:B4)",
+        "note": "La venta mayor es 44. Si parece inusual, verifica la fuente.",
         "updates": {
-          "D3": "20"
+          "D3": 44
         },
+        "hidden": [],
+        "bars": []
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "part": 1,
+    "title": "Ordena sin perder el número de pedido",
+    "headers": [
+      "Pedido",
+      "Cliente",
+      "Importe"
+    ],
+    "rows": [
+      [
+        "P21",
+        "Ana",
+        80
+      ],
+      [
+        "P22",
+        "Bruno",
+        150
+      ],
+      [
+        "P23",
+        "Clara",
+        120
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "A1",
+        "action": "Selecciona toda la tabla A1:C4",
+        "note": "Incluye pedido, cliente e importe en la selección.",
+        "updates": {},
         "hidden": [],
         "bars": []
       },
       {
-        "cell": "D4",
-        "action": "=MAX(B2:B4)",
-        "note": "MAX devuelve la cantidad mayor.",
+        "cell": "C1",
+        "action": "Ordena Importe de mayor a menor",
+        "note": "Indica que la tabla tiene encabezados y mantén las tres columnas juntas.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "A2",
+        "action": "Comprueba la fila de mayor importe",
+        "note": "Bruno sigue ligado al pedido P22 y al importe 150.",
         "updates": {
-          "D4": "30"
+          "A2": "P22",
+          "B2": "Bruno",
+          "C2": 150,
+          "A3": "P23",
+          "B3": "Clara",
+          "C3": 120,
+          "A4": "P21",
+          "B4": "Ana",
+          "C4": 80
         },
         "hidden": [],
         "bars": []
@@ -206,11 +566,63 @@
         "hidden": [],
         "bars": []
       }
+    ],
+    "part": 2
+  },
+  {
+    "id": 4,
+    "part": 3,
+    "title": "Valida estados y reconoce duplicados",
+    "headers": [
+      "Pedido",
+      "Estado"
+    ],
+    "rows": [
+      [
+        "P21",
+        "Pend."
+      ],
+      [
+        "P22",
+        "Completado"
+      ],
+      [
+        "P21",
+        "Pendiente"
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "B2",
+        "action": "Aplica una lista de estados",
+        "note": "Usa Pendiente, En proceso y Completado para evitar variantes como Pend.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B2",
+        "action": "Corrige el estado a Pendiente",
+        "note": "La lista normaliza el dato y facilita los filtros.",
+        "updates": {
+          "B2": "Pendiente"
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "A4",
+        "action": "Revisa el pedido P21 repetido",
+        "note": "Comprueba si las filas 2 y 4 representan el mismo pedido antes de quitar una copia.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      }
     ]
   },
   {
     "id": 5,
-    "title": "Identifica qué indicadores superaron la meta",
+    "title": "Prueba SI en los dos lados del umbral",
     "headers": [
       "Equipo",
       "Puntaje",
@@ -244,21 +656,183 @@
       {
         "cell": "C3",
         "action": "=SI(B3>=85;\"Cumple\";\"Revisar\")",
-        "note": "Copia la fórmula a las demás filas. Dos equipos cumplen la meta.",
+        "note": "Copia la fórmula a Centro: su puntaje de 88 cumple la condición.",
         "updates": {
-          "C3": "Cumple",
-          "C4": "Cumple"
+          "C3": "Cumple"
         },
         "hidden": [],
         "bars": []
       },
       {
-        "cell": "C5",
-        "action": "=CONTAR.SI(C2:C4;\"Cumple\")",
-        "note": "Cuenta los equipos que sí alcanzaron la meta.",
+        "cell": "C4",
+        "action": "=SI(B4>=85;\"Cumple\";\"Revisar\")",
+        "note": "El equipo Sur tiene 93 y cumple. Prueba también un puntaje de 85: el operador >= incluye la igualdad.",
         "updates": {
-          "A5": "Total",
-          "C5": "2"
+          "C4": "Cumple"
+        },
+        "hidden": [],
+        "bars": []
+      }
+    ],
+    "part": 1
+  },
+  {
+    "id": 5,
+    "part": 2,
+    "title": "Cuenta cuántas personas llegan al umbral",
+    "headers": [
+      "Persona",
+      "Puntaje",
+      "Indicador",
+      "Resultado"
+    ],
+    "rows": [
+      [
+        "Ana",
+        74,
+        "Cumplen"
+      ],
+      [
+        "Bruno",
+        85
+      ],
+      [
+        "Clara",
+        91
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "B2",
+        "action": "Selecciona B2:B4",
+        "note": "Aquí están los puntajes que se comparan con la meta de 85.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "D2",
+        "action": "=CONTAR.SI(B2:B4;\">=85\")",
+        "note": "La condición >=85 incluye tanto el 85 como el 91.",
+        "updates": {
+          "D2": 2
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "D2",
+        "action": "=CONTAR.SI(B2:B4;\">85\")",
+        "note": "Al quitar la igualdad, solo cuenta 91. Usa >=85 si 85 también alcanza la meta.",
+        "updates": {
+          "D2": 1
+        },
+        "hidden": [],
+        "bars": []
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "part": 3,
+    "title": "Suma los importes de una categoría",
+    "headers": [
+      "Categoría",
+      "Importe",
+      "Categoría buscada",
+      "Resultado"
+    ],
+    "rows": [
+      [
+        "Libros",
+        80,
+        "Libros"
+      ],
+      [
+        "Arte",
+        150
+      ],
+      [
+        "Libros",
+        120
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "A2",
+        "action": "Ubica el rango de criterio A2:A4",
+        "note": "La función compara cada categoría con el valor de C2.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "D2",
+        "action": "=SUMAR.SI(A2:A4;C2;B2:B4)",
+        "note": "Suma 80 y 120. La fila de Arte queda fuera del cálculo.",
+        "updates": {
+          "D2": 200
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "C2",
+        "action": "Cambia el criterio a Arte",
+        "note": "La misma fórmula ahora devuelve el importe de la única fila de Arte.",
+        "updates": {
+          "C2": "Arte",
+          "D2": 150
+        },
+        "hidden": [],
+        "bars": []
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "part": 1,
+    "title": "Relaciona pedidos con códigos únicos",
+    "headers": [
+      "Código",
+      "Producto",
+      "Código pedido",
+      "Encontrado"
+    ],
+    "rows": [
+      [
+        "P03",
+        "Teclado",
+        "P03"
+      ],
+      [
+        "P04",
+        "Mouse"
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "C2",
+        "action": "Toma el código del pedido",
+        "note": "Usa el identificador P03, que permanece aunque se reordene el catálogo.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "A2",
+        "action": "Busca el mismo código en el catálogo",
+        "note": "P03 coincide con una sola fila del catálogo.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "D2",
+        "action": "Devuelve el producto de esa fila",
+        "note": "El producto relacionado es Teclado. Dos filas con P03 harían ambigua la clave.",
+        "updates": {
+          "D2": "Teclado"
         },
         "hidden": [],
         "bars": []
@@ -283,7 +857,7 @@
       [
         "P04",
         18000,
-        "P09"
+        "P03"
       ]
     ],
     "steps": [
@@ -307,11 +881,122 @@
       },
       {
         "cell": "D3",
-        "action": "=BUSCARX(C3;$A$2:$A$3;$B$2:$B$3;\"No encontrado\")",
-        "note": "P09 no está en el catálogo. Un mensaje evita confundirlo con un precio de cero.",
+        "action": "=BUSCARX(C3;$A$2:$A$3;$B$2:$B$3)",
+        "note": "Al copiar, cambia C2 por C3. El rango del catálogo queda fijo y devuelve el precio de P03.",
         "updates": {
-          "D3": "No encontrado"
+          "D3": "27000"
         },
+        "hidden": [],
+        "bars": []
+      }
+    ],
+    "part": 2
+  },
+  {
+    "id": 6,
+    "part": 3,
+    "title": "Distingue un código ausente de precio cero",
+    "headers": [
+      "Código",
+      "Precio",
+      "Pedido",
+      "Resultado"
+    ],
+    "rows": [
+      [
+        "P03",
+        27000,
+        "P04"
+      ],
+      [
+        "P04",
+        0
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "C2",
+        "action": "Busca P04",
+        "note": "P04 existe. Su precio registrado es cero.",
+        "updates": {
+          "D2": 0
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "C2",
+        "action": "Ahora busca P99",
+        "note": "P99 no aparece en el catálogo. Un cero aquí ocultaría la ausencia.",
+        "updates": {
+          "C2": "P99",
+          "D2": ""
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "D2",
+        "action": "=BUSCARX(C2;A2:A3;B2:B3;\"No encontrado\")",
+        "note": "Configura un resultado alternativo para las claves ausentes.",
+        "updates": {
+          "D2": "No encontrado"
+        },
+        "hidden": [],
+        "bars": []
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "part": 1,
+    "title": "Prepara el rango que alimentará el resumen",
+    "headers": [
+      "Región",
+      "Mes",
+      "Importe"
+    ],
+    "rows": [
+      [
+        "Norte",
+        "Enero",
+        100
+      ],
+      [
+        "Sur",
+        "Enero",
+        "150 (texto)"
+      ],
+      [
+        "Norte",
+        "Febrero",
+        80
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "A1",
+        "action": "Usa una fila de encabezados",
+        "note": "Región, Mes e Importe describen la fuente de la tabla dinámica.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "C3",
+        "action": "Convierte el importe a número",
+        "note": "El texto puede provocar un recuento en vez de una suma.",
+        "updates": {
+          "C3": 150
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "A1",
+        "action": "Selecciona A1:C4",
+        "note": "Incluye la última venta de febrero. Una fila fuera del rango no aparecerá en el resumen.",
+        "updates": {},
         "hidden": [],
         "bars": []
       }
@@ -390,6 +1075,73 @@
         "hidden": [],
         "bars": []
       }
+    ],
+    "part": 2
+  },
+  {
+    "id": 7,
+    "part": 3,
+    "title": "Verifica los totales y prepara el gráfico",
+    "headers": [
+      "Región",
+      "Enero",
+      "Febrero",
+      "Total"
+    ],
+    "rows": [
+      [
+        "Norte",
+        120,
+        80,
+        200
+      ],
+      [
+        "Sur",
+        150,
+        200,
+        350
+      ],
+      [
+        "Total",
+        270,
+        280,
+        550
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "D4",
+        "action": "Compara el total general con la fuente",
+        "note": "El total de las ventas originales debe ser igual a 550.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "A2",
+        "action": "Selecciona A2:C3 para comparar",
+        "note": "Usa las dos regiones y ambos meses. Excluye el total general.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "D3",
+        "action": "Compara los totales por región",
+        "note": "Si el gráfico es por región, muestra Norte 200 y Sur 350. No agregues 550 como otra región.",
+        "updates": {},
+        "hidden": [],
+        "bars": [
+          [
+            "Norte",
+            200
+          ],
+          [
+            "Sur",
+            350
+          ]
+        ]
+      }
     ]
   },
   {
@@ -457,6 +1209,126 @@
             200
           ]
         ]
+      }
+    ],
+    "part": 1
+  },
+  {
+    "id": 8,
+    "part": 2,
+    "title": "Representa las ventas del trimestre",
+    "headers": [
+      "Mes",
+      "Ventas"
+    ],
+    "rows": [
+      [
+        "Enero",
+        100
+      ],
+      [
+        "Febrero",
+        150
+      ],
+      [
+        "Marzo",
+        120
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "A1",
+        "action": "Ordena los meses cronológicamente",
+        "note": "La interpretación depende de que la secuencia sea enero, febrero y marzo.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B1",
+        "action": "Insertar → Línea",
+        "note": "Para una tendencia, usa una línea con los meses en el eje horizontal.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "B4",
+        "action": "Etiqueta e interpreta el cambio",
+        "note": "Un título como Ventas mensuales (miles de COP) aclara el indicador. Febrero es el punto más alto.",
+        "updates": {},
+        "hidden": [],
+        "bars": [
+          [
+            "Enero",
+            100
+          ],
+          [
+            "Febrero",
+            150
+          ],
+          [
+            "Marzo",
+            120
+          ]
+        ],
+        "chartType": "line"
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "part": 3,
+    "title": "Concilia el tablero con la fuente",
+    "headers": [
+      "Región",
+      "Ventas fuente",
+      "Ventas tablero"
+    ],
+    "rows": [
+      [
+        "Costa",
+        300,
+        300
+      ],
+      [
+        "Centro",
+        200,
+        100
+      ],
+      [
+        "Total",
+        500,
+        400
+      ]
+    ],
+    "steps": [
+      {
+        "cell": "C4",
+        "action": "Compara 400 contra 500",
+        "note": "La diferencia indica que un dato o filtro puede estar excluyendo ventas.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "C3",
+        "action": "Corrige el rango del tablero",
+        "note": "Al incluir todas las ventas del periodo, Centro pasa de 100 a 200.",
+        "updates": {
+          "C3": 200,
+          "C4": 500
+        },
+        "hidden": [],
+        "bars": []
+      },
+      {
+        "cell": "C4",
+        "action": "Documenta el resultado",
+        "note": "La fuente y el tablero suman 500. Puedes concluir que Costa aportó 60 % de las ventas.",
+        "updates": {},
+        "hidden": [],
+        "bars": []
       }
     ]
   }

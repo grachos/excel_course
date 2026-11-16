@@ -6,14 +6,18 @@ import {test} from 'node:test';
 import sharp from 'sharp';
 import {buildDemos} from '../scripts/build-demos.js';
 import {modules} from '../course.js';
+import {moduleOutline} from '../lessons.js';
 
-test('all practice modules have a valid three-frame animated GIF', async () => {
+test('all 24 module parts have their own valid three-frame animated GIF', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'celda-demos-'));
   try {
     await buildDemos(directory);
-    assert.equal((await readdir(directory)).length, modules.length);
-    for (const {id} of modules) {
-      const gif = await sharp(join(directory,'modulo-'+id+'.gif')).metadata();
+    const expected = modules.flatMap(module => moduleOutline(module).parts.map((_,index) =>
+      'modulo-'+module.id+'-parte-'+(index+1)+'.gif'));
+    assert.equal(expected.length,24);
+    assert.deepEqual((await readdir(directory)).sort(),expected.sort());
+    for (const filename of expected) {
+      const gif = await sharp(join(directory,filename)).metadata();
       assert.equal(gif.format,'gif');
       assert.equal(gif.pages,3);
       assert.deepEqual(gif.delay,[4300,4300,4300]);

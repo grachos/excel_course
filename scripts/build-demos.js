@@ -23,10 +23,18 @@ function wrap(value, maxLength) {
   }, ['']);
 }
 
+function trendChart(series,max) {
+  const coords = series.map(([name,value],i) => ({x:140+i*250,y:399-value/max*49,name,value}));
+  const line = '<polyline points="'+coords.map(({x,y})=>x+','+y).join(' ')+'" fill="none" stroke="#387d56" stroke-width="3"/>';
+  return line + coords.map(({x,y,name,value}) =>
+    '<circle cx="'+x+'" cy="'+y+'" r="4" fill="#387d56"/>'+text(x+8,y-8,value,16)+text(x-18,409,name,16)
+  ).join('');
+}
+
 function frame(demo, index) {
   const step = demo.steps[index];
   const colWidth = Math.floor(920 / demo.headers.length);
-  const label = text(38,42,'CELDA / MÓDULO '+demo.id,18,'#297450',700);
+  const label = text(38,42,'CELDA / MÓDULO '+demo.id+' / PARTE '+demo.part,18,'#297450',700);
   const title = text(38,85,demo.title,33,'#203b34',700);
   const action = rect(38,111,963,52,'#e2f1e6') + text(53,143,step.cell,22,'#216844',700) +
     text(135,143,step.action,21);
@@ -49,7 +57,7 @@ function frame(demo, index) {
     })
   ].join('');
   const max = Math.max(...step.bars.map(([,value]) => value),1);
-  const chart = step.bars.map(([name,value],i) => {
+  const chart = step.chartType === 'line' ? trendChart(step.bars,max) : step.bars.map(([name,value],i) => {
     const y=365+i*28;
     return text(40,y+16,name,17) + rect(125,y,Math.round(380*value/max),18,'#387d56') + text(525,y+16,value,17);
   }).join('');
@@ -67,7 +75,7 @@ export async function buildDemos(destination) {
       frames.push(await sharp(frame(demo,index)).png().toBuffer());
     }
     await sharp(frames,{join:{animated:true}}).gif({delay:demo.steps.map(() => 4300),loop:0})
-      .toFile(join(destination,'modulo-'+demo.id+'.gif'));
+      .toFile(join(destination,'modulo-'+demo.id+'-parte-'+demo.part+'.gif'));
   }
 }
 

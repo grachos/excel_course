@@ -36,6 +36,7 @@ function renderParts(module, scores) {
     (index + 1) + ' · ' + esc(part.title) + '</strong><span class="pill" data-score-kind="' + part.kind + '">' +
     scoreText(scores[part.kind]) + '</span></summary><p>' + esc(part.lesson) + '</p>' +
     '<div class="lesson-example"><strong>Prueba este ejemplo</strong><p>' + esc(part.example) + '</p></div>' +
+    '<section class="course-demo part-demo" data-part-demo="'+(index+1)+'" aria-label="Ejemplo visual de la parte"><p>Cargando ejemplo visual…</p></section>' +
     '<button type="button" data-exam="' + part.kind + '">Examen de la parte · 3 preguntas</button>' +
     '<div data-quiz="' + part.kind + '"></div></details>'
   ).join('');
@@ -62,9 +63,8 @@ function lesson(id) {
     '<div class="lesson-body">'+(ownerAccess?'<p class="pill">Modo de revisión · Resultado de prueba</p>':'') +
     '<p class="eyebrow">MÓDULO '+m.id+' · '+esc(m.level)+'</p><h1>'+esc(m.title)+'</h1><p>'+esc(m.goal)+'</p>' +
     '<span class="pill">'+(user.tool==='excel'?'Ruta Excel Online':'Ruta Google Sheets')+'</span>' +
-    '<p class="muted">Lee las tres partes, reproduce el ejemplo y entrega la práctica antes de cerrar el módulo.</p>' +
+    '<p class="muted">En cada parte, revisa el ejemplo visual antes de presentar su examen.</p>' +
     renderParts(m,scores)+'<details class="card"><summary>Repaso y referencias rápidas</summary>'+m.guide.map(text=>'<p>'+esc(text)+'</p>').join('')+'</details>'+officialExamples(m) +
-    '<section class="card course-demo" id="course-demo" aria-label="Ejemplo visual"><p>Cargando ejemplo visual…</p></section>' +
     '<section class="card"><h2>Manos a la hoja</h2><p>'+esc(m.task)+'</p>'+platformGuide(m)+'<p>'+esc(toolGuide)+'</p>' +
     '<button type="button" class="primary" data-template="'+m.id+'">↓ Descargar plantilla</button>' +
     '<p id="template-status" class="muted" role="status"></p><form id="practice">' +
@@ -82,10 +82,14 @@ function lesson(id) {
     '<button type="button" class="primary" data-exam="long">Iniciar '+examTitle.toLowerCase()+'</button>' +
     '<div data-quiz="long"></div></section></div>';
 
-  const demoContainer=$('#course-demo');
-  import('/course-demo.js').then(({mountCourseDemo}) => mountCourseDemo(demoContainer,id)).catch(() => {
-    if(demoContainer.isConnected)demoContainer.textContent='No pudimos cargar el ejemplo visual. Puedes continuar con la guía y la práctica.';
-  });
+  const demoContainers = [...$('#lesson').querySelectorAll('[data-part-demo]')];
+  for (const container of demoContainers) {
+    import('/course-demo.js')
+      .then(({mountCourseDemo}) => mountCourseDemo(container,id,Number(container.dataset.partDemo)))
+      .catch(() => {
+        if (container.isConnected) container.textContent='No pudimos cargar el ejemplo visual de esta parte.';
+      });
+  }
 }
 
 async function refreshLessonScores(moduleId) {

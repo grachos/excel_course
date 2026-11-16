@@ -12,19 +12,33 @@ function loadDemos() {
   return demosRequest;
 }
 
-export async function mountCourseDemo(container, id) {
-  const demo = (await loadDemos()).find(example => example.id === id);
-  if (!container.isConnected || !demo) return;
+function lineChart(series) {
+  const points = series.map(([name,value],i) => ({
+    x:50 + i*120,y:127-value/Math.max(...series.map(([,n])=>n))*91,name,value
+  }));
+  return '<svg class="demo-trend" viewBox="0 0 340 154" role="img" aria-label="Ventas mensuales: ' +
+    points.map(({name,value}) => safe(name)+': '+value).join(', ') + '">' +
+    '<path d="M 30 20 V 127 H 320" fill="none" stroke="#9ab1a3"/>' +
+    '<polyline points="' + points.map(({x,y}) => x+','+y).join(' ') + '" fill="none" stroke="#347e58" stroke-width="3"/>' +
+    points.map(({x,y,name,value})=>'<circle cx="'+x+'" cy="'+y+'" r="4" fill="#216844"/>'+
+      '<text x="'+x+'" y="'+(y-10)+'" text-anchor="middle">'+value+'</text>'+
+      '<text x="'+x+'" y="146" text-anchor="middle">'+safe(name)+'</text>').join('') + '</svg>';
+}
+
+export async function mountCourseDemo(container, id, part) {
+  const demo = (await loadDemos()).find(example => example.id === id && example.part === part);
+  if (!container.isConnected) return;
+  if (!demo) throw new Error('Ejemplo visual no disponible.');
   let index = 0;
   let timer = null;
 
-  container.innerHTML = '<h2>Ejemplo visual</h2><h3>' + safe(demo.title) + '</h3>' +
+  container.innerHTML = '<p class="eyebrow">EJEMPLO VISUAL</p><h3>' + safe(demo.title) + '</h3>' +
     '<div class="demo-action"></div><div class="demo-board"></div>' +
     '<p class="demo-explanation" aria-live="polite"></p>' +
     '<div class="demo-controls"><button type="button" data-demo="previous">Anterior</button>' +
     '<button type="button" class="primary" data-demo="play">Reproducir</button>' +
     '<button type="button" data-demo="next">Siguiente</button>' +
-    '<a class="button" href="/media/modulo-' + id + '.gif" download>Descargar GIF</a></div>';
+    '<a class="button" href="/media/modulo-' + id + '-parte-' + part + '.gif" download>Descargar GIF</a></div>';
 
   const playButton = container.querySelector('[data-demo=play]');
   const previous = container.querySelector('[data-demo=previous]');
@@ -43,7 +57,7 @@ export async function mountCourseDemo(container, id) {
       }).join('') + '</tr>';
     }).join('');
     const largest = Math.max(...step.bars.map(([,value]) => value), 1);
-    const chart = step.bars.length ? '<div class="demo-chart" aria-label="Comparación por categoría">' +
+    const chart = step.chartType === 'line' ? lineChart(step.bars) : step.bars.length ? '<div class="demo-chart" aria-label="Comparación por categoría">' +
       step.bars.map(([name,value]) => '<div><span>' + safe(name) + '</span><meter min="0" max="' + largest +
       '" value="' + value + '" aria-label="' + safe(name) + '"></meter><strong>' + value + '</strong></div>').join('') + '</div>' : '';
     container.querySelector('.demo-action').innerHTML = '<strong>' + safe(step.cell) + '</strong><code>' + safe(step.action) + '</code>';
@@ -59,13 +73,19 @@ export async function mountCourseDemo(container, id) {
     clearInterval(timer);
     timer = null;
   }
+  container.closest('details')?.addEventListener('toggle', event => {
+    if (!event.currentTarget.open && timer) {
+      pause();
+      render();
+    }
+  });
   container.addEventListener('click', event => {
     const action = event.target.closest('[data-demo]')?.dataset.demo;
     if (!action) return;
     if (action === 'play' && !timer) {
       if (index === demo.steps.length - 1) index = 0;
       timer = setInterval(() => {
-        if (!container.isConnected || container.closest('[hidden]')) {
+        if (!container.isConnected || container.closest('[hidden]') || !container.closest('details')?.open) {
           pause();
           render();
           return;
