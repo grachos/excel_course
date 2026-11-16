@@ -15,7 +15,7 @@ const parts = ['Celdas','Formato','Estructura'].map((title,index)=>({title,kind:
 test('an unfinished module explains missing activities and their effect on approval', () => {
   const result=plan({id:1,parts},{passed:false,score:null,scores:{'part:1':100}});
   assert.deepEqual(Array.from(result.items,item=>item.target),['lesson-practice','lesson-part-2','lesson-part-3','lesson-assessment']);
-  assert.match(result.items[3].reason,/examen final del módulo 8/);
+  assert.match(result.items[3].reason,/60 minutos/);
 });
 
 test('the final module explains the project prerequisite before the final can be opened', () => {

@@ -70,7 +70,7 @@ function studyPlan(module, result) {
   if (!Number.isFinite(scores.long)) {
     add(final && !Number.isFinite(scores.practice) ? 'El examen final está pendiente del proyecto.' : 'Presenta '+(final?'el ':'la ')+assessment+'.', final
       ? (result.blocks?.long || 'Dura hasta 60 minutos y necesitas al menos 80/100.')
-      : (result.blocks?.long ? result.blocks.long+' ' : '')+'Vale el 50 % del módulo. El contador de 60 minutos se usa en el examen final del módulo 8.','lesson-assessment');
+      : (result.blocks?.long ? result.blocks.long+' ' : '')+'Vale el 50 % del módulo. Tienes 60 minutos para la evaluación de unidad.','lesson-assessment');
   } else if (final && scores.long<80) {
     add('Repite el examen final.','Tu mejor nota es '+scoreText(scores.long)+'. Consulta tus intentos y la hora de reintento si están agotados.','lesson-assessment');
   }
@@ -168,7 +168,7 @@ function lesson(id) {
     '<div id="practice-report"></div></section>' +
     '<section class="card" id="lesson-assessment"><h2>'+examTitle+'</h2><p>'+m.unitQuestionCount+' preguntas. '+(final
       ? 'Cubre los ocho módulos. Entrega el proyecto primero y alcanza 80 en ambas actividades. Tienes 60 minutos por intento y hasta tres intentos. Después del tercero, espera 24 horas para volver a presentarlo.'
-      : 'Aplica lo aprendido en situaciones de la unidad. El reloj de 60 minutos aparece en el examen final del módulo 8.')+'</p>' +
+      : 'Aplica lo aprendido en situaciones de la unidad. Tienes 60 minutos. Al iniciar verás el tiempo restante; salir o recargar no detiene el reloj.')+'</p>' +
     '<p class="muted">Práctica: 30 % · Promedio de las tres partes: 20 % · '+examTitle+': 50 %.</p>' +
     '<dl class="lesson-scores"><div><dt>Práctica</dt><dd data-score-kind="practice">'+scoreText(scores.practice)+'</dd></div>' +
     '<div><dt>Nota de partes</dt><dd data-score-kind="short">'+scoreText(scores.short)+'</dd></div>' +
@@ -176,7 +176,7 @@ function lesson(id) {
     (final ? '<div id="final-clock" class="exam-clock" aria-label="Tiempo del examen final">' +
       '<div><span>Tiempo del examen final</span><strong data-exam-clock-digits role="timer">60:00</strong></div>' +
       '<p data-exam-clock-note>El contador empieza cuando inicias un intento.</p></div>' +
-      '<div id="final-status" class="final-timing" aria-label="Estado del examen final"><p role="status">Consultando intentos…</p></div>' : '') +
+      '<div id="final-status" class="final-timing" aria-label="Estado del examen final"><p role="status">Consultando intentos…</p></div>' : '<div class="exam-clock" data-unit-clock aria-label="Tiempo de la evaluación"><div><span>Tiempo disponible</span><strong>60:00</strong></div><p>Al iniciar o continuar aparecerá la cuenta regresiva junto a las preguntas.</p></div>') +
     '<button type="button" class="primary" data-exam="long" data-block-kind="long"'+(final?' disabled':assessment.disabled)+'>Iniciar '+examTitle.toLowerCase()+'</button>' +
     renderBlockMessage('long',assessment.reason) +
     '<div data-quiz="long"></div></section></div>';
@@ -353,17 +353,23 @@ async function openQuiz(button) {
   try {
     const data=await api('/modules/'+moduleId+'/exam',{method:'POST',body:JSON.stringify({kind})});
     if(!target?.isConnected)return;
-    const header = data.final ? '<div class="exam-clock-dock" data-final-dock aria-label="Reloj del examen final">' +
+    const timing = data.final || data.timing;
+    const header = timing ? '<div class="exam-clock-dock" data-final-dock aria-label="Tiempo restante de la evaluación">' +
       '<div><span>Tiempo restante</span><strong data-final-timer role="timer">60:00</strong></div>' +
-      '<span>Intento '+data.final.attempt+' de '+data.final.maxAttempts+'</span></div>' +
-      '<p class="final-timing" data-final-expired hidden role="status">Se agotó el tiempo. Usa el botón del examen para consultar tu siguiente intento.</p>' : '';
+      (data.final ? '<span>Intento '+data.final.attempt+' de '+data.final.maxAttempts+'</span>' : '<span>'+(kind==='long'?'Evaluación de unidad · 60 minutos':'Examen de parte · 30 minutos')+'</span>')+'</div>' +
+      '<p class="final-timing" data-final-expired hidden role="status">Se agotó el tiempo. Tus respuestas ya no se pueden enviar. Usa el botón del examen para iniciar o consultar el siguiente intento.</p>' : '';
     target.innerHTML='<form class="quiz-form" data-id="'+data.id+'" data-module-id="'+moduleId+'" data-count="'+data.questions.length+'">' + header +
       data.questions.map((q,i)=>'<fieldset><legend>'+ (i+1) +'. '+esc(q.question)+'</legend>' +
         q.options.map((option,j)=>'<label><input type="radio" name="q'+i+'" value="'+j+'" required>'+esc(option)+'</label>').join('')+
       '</fieldset>').join('')+'<button class="primary">Entregar respuestas</button></form>';
+    if (timing) {
+      enableFinalTimer(target.querySelector('form'),timing);
+      const idleClock=$('[data-unit-clock]');
+      if(kind==='long' && idleClock) idleClock.hidden=true;
+    }
+    button.textContent='Continuar '+(kind==='long'?'evaluación':'examen de parte');
     if (data.final) {
       button.textContent = 'Continuar examen final';
-      enableFinalTimer(target.querySelector('form'),data.final);
       await syncFinalStatus();
     }
     target.querySelector('input')?.focus();

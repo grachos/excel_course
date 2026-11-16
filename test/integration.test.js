@@ -23,7 +23,9 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal(blocked.status,403);
  assert.match((await blocked.json()).error,/aprueba primero el módulo 1/);
  assert.equal((await request('/logout',{cookie,method:'POST',originOverride:'https://wrong.example'})).status,403);
- const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('Entrega');sheet.getCell('A1').value='Concepto';sheet.getCell('B1').value='Valor';sheet.getCell('B2').value=800000;
+ const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('Entrega');sheet.addRows([['Código','Concepto','Valor'],['001','Arriendo',800000],['002','Internet',120000],['003','Servicios',180000],['004','Papelería',50000]]);
+ sheet.getCell('E2').value='C3';sheet.getCell('E3').value='C2:C5';
+ for(const cell of ['C2','C3','C4','C5'])sheet.getCell(cell).numFmt='"$"#,##0';
  const form=new FormData();form.append('file',new Blob([await workbook.xlsx.writeBuffer()]),'practice.xlsx');
  const sequenceIp='198.51.100.23';
  const examOf = kind => request('/modules/1/exam',{cookie,method:'POST',clientAddress:sequenceIp,body:{kind}});
@@ -60,6 +62,13 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  }
  const exam=await(await request('/modules/1/exam',{cookie,method:'POST',body:{kind}})).json();
  assert.equal(exam.questions.length,kind==='long'?6:3);
+ assert.ok(exam.timing.expiresAt);
+ const remaining=Date.parse(exam.timing.expiresAt)-Date.parse(exam.timing.serverNow);
+ assert.ok(remaining>(kind==='long'?59:29)*60000);
+ const resumed=await (await examOf(kind)).json();
+ assert.equal(resumed.id,exam.id);
+ assert.equal(resumed.timing.expiresAt,exam.timing.expiresAt);
+ assert.deepEqual(resumed.questions,exam.questions);
  const answers=answerFor(1,kind,exam.questions);
  const submit=await request('/modules/1/exam/submit',{cookie,method:'POST',body:{id:exam.id,answers}});
  assert.equal((await submit.json()).score,100);
@@ -69,6 +78,12 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal(firstProgress.progress[0].scores.short,100);
  assert.equal((await request('/modules/2/exam',{cookie,method:'POST',clientAddress:sequenceIp,body:{kind:'part:1'}})).status,200);
  assert.equal((await request('/modules/2/template',{cookie,clientAddress:sequenceIp})).status,403);
+ // Expired unit attempts cannot be submitted; a new attempt gets a new deadline.
+ const expiring=await (await examOf('long')).json();
+ await clockTestDb.query("UPDATE challenges SET expires=clock_timestamp()-interval '1 second' WHERE id=$1",[expiring.id]);
+ assert.equal((await request('/modules/1/exam/submit',{cookie,method:'POST',clientAddress:sequenceIp,body:{id:expiring.id,answers:answerFor(1,'long',expiring.questions)}})).status,400);
+ const replacement=await (await examOf('long')).json();
+ assert.notEqual(replacement.id,expiring.id);
  const template = await request('/modules/1/template',{cookie});
  assert.equal(template.status,200);
  assert.match(template.headers.get('content-type'),/^application\/vnd\.openxmlformats/);
@@ -99,12 +114,12 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal((await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind:'long'}})).status,403);
  const practiceBook = new ExcelJS.Workbook();
  const practiceSheet = practiceBook.addWorksheet('Entrega');
- for (const {cell,expected} of modules[7].checks) practiceSheet.getCell(cell).value = expected;
+ for (const check of modules[7].checks.filter(c=>!c.type)) practiceSheet.getCell(check.cell).value = check.formula ? {formula:'1',result:check.expected} : check.expected;
  const ownerPractice = new FormData();
  ownerPractice.append('file', new Blob([await practiceBook.xlsx.writeBuffer()]), 'project.xlsx');
  const preview = await request('/modules/8/practice',{cookie:cookieB,method:'POST',body:ownerPractice,raw:true});
  assert.equal(preview.status,200);
- assert.equal((await preview.json()).score,100);
+ assert.equal((await preview.json()).score,90);
  // Owner can inspect every module, but cannot skip prerequisites to start any unit exam.
  for (const {id} of modules) {
    const blocked = await request('/modules/'+id+'/exam',{cookie:cookieB,method:'POST',clientAddress:sequenceIp,body:{kind:'long'}});
@@ -209,10 +224,11 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
    assert.equal(result.status,200);
    return result.json();
  }
- assert.equal((await uploadPivot()).score,100);
+ pivotResult.getCell('H2').value='Norte';pivotResult.getCell('H3').value=190;
+ assert.equal((await uploadPivot()).score,90);
  pivotResult.getCell('B3').value=2;
  const mistaken = await uploadPivot();
- assert.equal(mistaken.score,92);
+ assert.equal(mistaken.score,83.6);
  assert.equal(mistaken.details.find(detail => detail.cell==='sur:febrero').ok,false);
  const ownerList = await (await request('/owner/students?q='+encodeURIComponent(email),{cookie:cookieB})).json();
  const student = ownerList.students.find(row => row.email === email);

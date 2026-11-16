@@ -1,3 +1,5 @@
+import {startUnitExam} from './unit-exam.js';
+import {populatePractice,gradePractice} from './practice-workbook.js';
 import {prepareQuestions, shuffle} from './exam-options.js';
 import {mountOwner, ownerStatus, progressFromScores} from './owner.js';
 import {explainPractice, tutorConfigured} from './tutor.js';
@@ -122,19 +124,7 @@ app.get('/api/modules/:id/template',requirePractice,async(req,res)=>{
    row.getCell(1).alignment = {wrapText:true};
    row.height = 38;
  }
- if (req.module.id === 7) {
-   const data = w.addWorksheet('Datos');
-   data.addRows(pivotSource);
-   data.getRow(1).font = {bold:true};
-   data.columns.forEach(column => {column.width = 18;});
- }
- const s = w.addWorksheet('Entrega');
- if (req.module.id !== 7) {
-   for (const check of req.module.checks) {
-     s.getCell(check.cell).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFE7F4ED'}};
-   }
- }
- for (let i=1;i<=8;i++) s.getColumn(i).width=20;
+ populatePractice(w,req.module);
  const buffer = Buffer.from(await w.xlsx.writeBuffer());
  res.set('Cache-Control', 'private, no-store');
  res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -143,22 +133,15 @@ app.get('/api/modules/:id/template',requirePractice,async(req,res)=>{
 });
 function zipSafe(buffer){return new Promise((resolve,reject)=>yauzl.fromBuffer(buffer,{lazyEntries:true},(err,z)=>{
  if(err)return reject(Error('Archivo XLSX inválido.'));
- let total=0,count=0;z.on('error',reject);z.on('entry',e=>{total+=e.uncompressedSize;count++;if(total>20*1024*1024||count>1500||e.generalPurposeBitFlag&1){z.close();return reject(Error('Archivo demasiado complejo o cifrado.'));}z.readEntry();});z.on('end',resolve);z.readEntry();
+ let total=0,count=0,hasChart=false;z.on('error',reject);z.on('entry',e=>{if(/^xl\/charts\/chart[0-9]+\.xml$/.test(e.fileName))hasChart=true;total+=e.uncompressedSize;count++;if(total>20*1024*1024||count>1500||e.generalPurposeBitFlag&1){z.close();return reject(Error('Archivo demasiado complejo o cifrado.'));}z.readEntry();});z.on('end',()=>resolve({hasChart}));z.readEntry();
 }));}
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:2*1024*1024,files:1,fields:0}});
 app.post('/api/modules/:id/practice',requirePractice,rateLimit({windowMs:60000,limit:5}),upload.single('file'),async(req,res)=>{
  if(!req.file||!req.file.originalname.toLowerCase().endsWith('.xlsx'))return res.status(400).json({error:'Entrega un archivo .xlsx de hasta 2 MB.'});
- let w=new ExcelJS.Workbook();
- try{await zipSafe(req.file.buffer);await w.xlsx.load(req.file.buffer);}catch{return res.status(400).json({error:'No se pudo leer el archivo. Usa un XLSX válido, sin cifrar, de hasta 2 MB y 20 MB descomprimido.'});}
+ let w=new ExcelJS.Workbook(), packageInfo;
+ try{packageInfo=await zipSafe(req.file.buffer);await w.xlsx.load(req.file.buffer);}catch{return res.status(400).json({error:'No se pudo leer el archivo. Usa un XLSX válido, sin cifrar, de hasta 2 MB y 20 MB descomprimido.'});}
  const sheet=w.getWorksheet('Entrega');if(!sheet)return res.status(400).json({error:'Conserva la hoja llamada Entrega.'});
- const answers = {};
- if (req.module.id !== 7) {
-   for (const {cell} of req.module.checks) {
-     const value = sheet.getCell(cell).value;
-     answers[cell] = value && typeof value === 'object' ? value.result : value;
-   }
- }
- const report = req.module.id === 7 ? gradePivot(sheet, req.module.checks) : gradeChecks(req.module.checks, answers);
+ const report = gradePractice(w,req.module,packageInfo);
  report.mode='rules';report.note=req.module.reviewNote ?? 'Se verifican resultados guardados. No se recalculan fórmulas ni se califican gráficos o formatos. Si faltan resultados, abre, recalcula y guarda desde Excel o Sheets.';
  const explanation = await explainPractice(req.module.title, report.details);
  if (explanation) {
@@ -198,10 +181,7 @@ app.post('/api/modules/:id/exam',async(req,res)=>{
    const result = await startFinalExam(db,req.user,shuffle(items));
    return res.status(result.status).json(result.body);
  }
- const id = randomBytes(24).toString('hex');
- await db.query("DELETE FROM challenges WHERE user_id=$1 AND (expires<now() OR (module=$2 AND kind=$3 AND owner_preview=$4))",[req.user.id,req.module.id,kind,req.user.is_owner]);
- await db.query("INSERT INTO challenges(id,user_id,module,kind,answers,expires,owner_preview) VALUES($1,$2,$3,$4,$5,now()+interval '30 minutes',$6)",[id,req.user.id,req.module.id,kind,JSON.stringify(items),req.user.is_owner]);
- res.json({id,questions:items.map(q=>({question:q.question,options:q.options.map(o=>o.text)}))});
+ res.json(await startUnitExam(db,req.user,req.module.id,kind,items));
 });
 
 app.post('/api/modules/:id/exam/submit',async(req,res)=>{
