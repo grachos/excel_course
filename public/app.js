@@ -168,12 +168,12 @@ function lesson(id) {
     '<div id="practice-report"></div></section>' +
     '<section class="card" id="lesson-assessment"><h2>'+examTitle+'</h2><p>'+m.unitQuestionCount+' preguntas. '+(final
       ? 'Cubre los ocho módulos. Entrega el proyecto primero y alcanza 80 en ambas actividades. Tienes 60 minutos por intento y hasta tres intentos. Después del tercero, espera 24 horas para volver a presentarlo.'
-      : 'Aplica lo aprendido en situaciones de la unidad. Tienes 60 minutos. Al iniciar verás el tiempo restante; salir o recargar no detiene el reloj.')+'</p>' +
+      : 'Aplica lo aprendido en situaciones de la unidad. Tienes 60 minutos y tres intentos. Necesitas 80/100. Al agotar los intentos debes esperar 24 horas; se mostrará la fecha y hora de reintento.')+'</p>' +
     '<p class="muted">Práctica: 30 % · Promedio de las tres partes: 20 % · '+examTitle+': 50 %.</p>' +
     '<dl class="lesson-scores"><div><dt>Práctica</dt><dd data-score-kind="practice">'+scoreText(scores.practice)+'</dd></div>' +
     '<div><dt>Nota de partes</dt><dd data-score-kind="short">'+scoreText(scores.short)+'</dd></div>' +
     '<div><dt>'+examTitle+'</dt><dd data-score-kind="long">'+scoreText(scores.long)+'</dd></div></dl>' +
-    (final ? '<div id="final-clock" class="exam-clock" aria-label="Tiempo del examen final">' +
+    (true ? '<div id="final-clock" class="exam-clock" aria-label="Tiempo del examen final">' +
       '<div><span>Tiempo del examen final</span><strong data-exam-clock-digits role="timer">60:00</strong></div>' +
       '<p data-exam-clock-note>El contador empieza cuando inicias un intento.</p></div>' +
       '<div id="final-status" class="final-timing" aria-label="Estado del examen final"><p role="status">Consultando intentos…</p></div>' : '<div class="exam-clock" data-unit-clock aria-label="Tiempo de la evaluación"><div><span>Tiempo disponible</span><strong>60:00</strong></div><p>Al iniciar o continuar aparecerá la cuenta regresiva junto a las preguntas.</p></div>') +
@@ -181,7 +181,7 @@ function lesson(id) {
     renderBlockMessage('long',assessment.reason) +
     '<div data-quiz="long"></div></section></div>';
 
-  if (final) syncFinalStatus();
+  syncFinalStatus();
   const demoContainers = [...$('#lesson').querySelectorAll('[data-part-demo]')];
   for (const container of demoContainers) {
     import('/course-demo.js')
@@ -246,9 +246,10 @@ async function syncFinalStatus() {
   const request=++finalStatusRequest;
   clearInterval(finalStatusInterval);
   try {
-    const final=await api('/modules/8/exam/status');
+    const moduleId=current.id;
+    const final=await api('/modules/'+moduleId+'/exam/status');
     if (request!==finalStatusRequest || !panel.isConnected || $('#lesson').hidden) return;
-    const prerequisite=progress[7]?.blocks?.long;
+    const prerequisite=progress[current.id-1]?.blocks?.long;
     const active=final.status==='active';
     const locked=final.status==='cooldown';
     const examPassed=final.bestExamScore>=80;
@@ -257,7 +258,7 @@ async function syncFinalStatus() {
       ? 'Última nota: '+scoreText(final.lastExamScore)+'. ' : '';
     let guidance;
     if (examPassed) {
-      guidance=final.projectScore>=80 ? 'Ya aprobaste el examen y el proyecto.'
+      guidance=moduleId!==8 ? 'Ya aprobaste esta evaluación.' : final.projectScore>=80 ? 'Ya aprobaste el examen y el proyecto.'
         : 'Ya aprobaste el examen. Mejora el proyecto hasta alcanzar 80/100.';
     } else if (active) {
       guidance='Tu intento sigue en curso. Puedes retomarlo sin gastar otro intento.';
@@ -266,22 +267,22 @@ async function syncFinalStatus() {
     } else if (final.expiredAt && final.attemptsUsed) {
       guidance='Se agotó el tiempo del último intento. Debes repetir el examen para aprobar.';
     } else if (latest) {
-      guidance='Debes repetir el examen y alcanzar al menos 80/100.';
+      guidance='No aprobaste este intento. Debes repetir la evaluación y alcanzar al menos 80/100.';
     } else {
-      guidance=hasProject ? 'Necesitas 80/100 para aprobar el examen.' : 'Aún no has entregado el proyecto final. Por eso el examen sigue bloqueado. Sube tu archivo .xlsx en «Manos a la hoja».';
+      guidance=moduleId!==8 || hasProject ? 'Necesitas 80/100 para aprobar el examen.' : 'Aún no has entregado el proyecto final. Por eso el examen sigue bloqueado. Sube tu archivo .xlsx en «Manos a la hoja».';
     }
     if (prerequisite && !locked && !active) guidance=prerequisite;
     if (examPassed && locked) guidance+=' '+finalAvailableText(final.availableAt);
     panel.innerHTML='<strong>Intentos utilizados: '+final.attemptsUsed+' de '+final.maxAttempts+'</strong>'+
       '<p>Intentos disponibles: '+final.attemptsRemaining+'</p>'+
       '<p role="status">'+esc(latest+guidance)+'</p>';
-    button.dataset.locked=String(locked || !hasProject || Boolean(prerequisite));
+    button.dataset.locked=String(locked || (moduleId===8 && !hasProject) || Boolean(prerequisite));
     button.disabled=button.dataset.locked==='true';
     button.textContent=locked ? 'Examen en espera'
-      : prerequisite ? 'Examen final bloqueado'
-      : active ? 'Continuar examen final'
-      : examPassed ? 'Volver a presentar el examen final'
-      : final.attemptsUsed || latest ? 'Reintentar examen final' : 'Iniciar examen final';
+      : prerequisite ? 'Evaluación bloqueada'
+      : active ? 'Continuar evaluación'
+      : examPassed ? 'Volver a presentar evaluación'
+      : final.attemptsUsed || latest ? 'Reintentar evaluación' : 'Iniciar evaluación';
 
     if (active || locked) {
       const deadline=finalDeadline(active?final.expiresAt:final.availableAt,final.serverNow);
@@ -307,8 +308,8 @@ async function syncFinalStatus() {
   } catch (err) {
     if (request!==finalStatusRequest || !panel.isConnected) return;
     panel.textContent='No pudimos consultar el estado. '+err.message;
-    button.dataset.locked=String(Boolean(progress[7]?.blocks?.long));
-    button.disabled=button.dataset.locked==='true';
+    button.dataset.locked=String(Boolean(progress[current.id-1]?.blocks?.long));
+    button.disabled=true;
   }
 }
 
@@ -369,20 +370,20 @@ async function openQuiz(button) {
     }
     button.textContent='Continuar '+(kind==='long'?'evaluación':'examen de parte');
     if (data.final) {
-      button.textContent = 'Continuar examen final';
+      button.textContent = 'Continuar evaluación';
       await syncFinalStatus();
     }
     target.querySelector('input')?.focus();
   } catch(err) {
     if (err.availableAt && target?.isConnected) {
       target.textContent = err.message+' '+finalAvailableText(err.availableAt);
-      if(moduleId===8 && kind==='long')await syncFinalStatus();
+      if(kind==='long')await syncFinalStatus();
     } else {
       error(err);
     }
   } finally { button.disabled=button.dataset.locked==='true'; }
 }
-function reportHTML(r){return '<div class="feedback"><h3>'+scoreText(r.score)+' · '+(r.score>=80?'Meta alcanzada':'Sigue practicando')+'</h3>'+(r.mode?'<span class="pill">'+(r.mode==='ai'?'Explicación con IA':'Corrección automática por reglas')+'</span>':'')+r.details.map(d=>'<p class="'+(d.ok?'good':'bad')+'">'+(d.ok?'✓ ':'↳ ')+esc(d.cell||d.question)+': '+esc(d.message)+(d.correctAnswer&&!d.ok?' Respuesta correcta: '+esc(d.correctAnswer):'')+'</p>').join('')+(r.tutor?'<p>'+esc(r.tutor)+'</p>':'')+(typeof r.examScore==='number'?'<p>Examen: '+scoreText(r.examScore)+' · Proyecto: '+scoreText(r.projectScore)+'</p>':'')+(r.note?'<p class="muted">'+esc(r.note)+'</p>':'')+'</div>';}
+function reportHTML(r){return '<div class="feedback"><h3>'+scoreText(r.score)+' · '+(r.score>=80?'Meta alcanzada':r.final?'No aprobaste · Debes repetir la evaluación':'Sigue practicando')+'</h3>'+(r.mode?'<span class="pill">'+(r.mode==='ai'?'Explicación con IA':'Corrección automática por reglas')+'</span>':'')+r.details.map(d=>'<p class="'+(d.ok?'good':'bad')+'">'+(d.ok?'✓ ':'↳ ')+esc(d.cell||d.question)+': '+esc(d.message)+(d.correctAnswer&&!d.ok?' Respuesta correcta: '+esc(d.correctAnswer):'')+'</p>').join('')+(r.tutor?'<p>'+esc(r.tutor)+'</p>':'')+(typeof r.examScore==='number'?'<p>Examen: '+scoreText(r.examScore)+(typeof r.projectScore==='number'?' · Proyecto: '+scoreText(r.projectScore):'')+'</p>':'')+(r.note?'<p class="muted">'+esc(r.note)+'</p>':'')+'</div>';}
 const activityNames = {practice:'Práctica',short:'Examen corto',long:'Evaluación de unidad',
   'part:1':'Examen de parte 1','part:2':'Examen de parte 2','part:3':'Examen de parte 3'};
 const activityName = (kind,moduleId) => kind==='long'&&moduleId===8 ? 'Examen final acumulativo' : activityNames[kind];
@@ -593,7 +594,7 @@ document.addEventListener('submit',async e=>{
    const result=await api('/modules/'+moduleId+'/practice',{method:'POST',body:new FormData(form)});
    if(target.isConnected)target.innerHTML=reportHTML(result);
    await refreshLessonScores(moduleId);
-   if(moduleId===8)await syncFinalStatus();
+   await syncFinalStatus();
  }
  if(form.classList.contains('quiz-form')){
    const data=new FormData(form);
@@ -602,8 +603,8 @@ document.addEventListener('submit',async e=>{
    const answers=Array.from({length:Number(form.dataset.count)},(_,i)=>Number(data.get('q'+i)));
    const result=await api('/modules/'+moduleId+'/exam/submit',{method:'POST',body:JSON.stringify({id:form.dataset.id,answers})});
    if(form.isConnected) {
-     const retry=result.final && result.examScore<80 && (progress[7].scores.long??0)<80
-       ? '<p class="final-timing"><strong>Debes repetir el examen.</strong> '+esc(result.final.availableAt
+     const retry=result.final && result.examScore<80
+       ? '<p class="final-timing"><strong>No aprobaste: necesitas al menos 80/100.</strong> Intentos utilizados: '+result.final.attempt+' de '+result.final.maxAttempts+'. Intentos restantes: '+(result.final.maxAttempts-result.final.attempt)+'. '+esc(result.final.availableAt
          ? finalAvailableText(result.final.availableAt) : 'Necesitas al menos 80/100 para aprobar.')+'</p>' : '';
      target.innerHTML=reportHTML(result)+retry;
      if (result.final) {

@@ -1,3 +1,4 @@
+import {migrateUnitAttempts} from './unit-attempt-migration.js';
 import {startUnitExam} from './unit-exam.js';
 import {populatePractice,gradePractice} from './practice-workbook.js';
 import {prepareQuestions, shuffle} from './exam-options.js';
@@ -35,6 +36,7 @@ ALTER TABLE attempts ADD COLUMN IF NOT EXISTS owner_preview BOOLEAN NOT NULL DEF
 ALTER TABLE challenges ADD COLUMN IF NOT EXISTS owner_preview BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS attempts_user_id_id ON attempts(user_id,id);
 ${finalExamSchema}`);
+await migrateUnitAttempts(db);
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const safeUser=u=>({id:u.id,name:u.name,email:u.email,tool:u.tool});
 const authLimit=rateLimit({windowMs:15*60000,limit:20});
@@ -162,9 +164,8 @@ function examReport(questions, answers) {
 }
 
 app.get('/api/modules/:id/exam/status',async(req,res)=>{
- if (req.module.id !== 8) return res.status(404).json({error:'Estado disponible solo para el examen final.'});
  res.set('Cache-Control','private, no-store');
- res.json(await finalExamStatus(db,req.user));
+ res.json(await finalExamStatus(db,req.user,req.module.id));
 });
 
 app.post('/api/modules/:id/exam',async(req,res)=>{
@@ -177,8 +178,8 @@ app.post('/api/modules/:id/exam',async(req,res)=>{
    return res.status(400).json({error:'Entrega primero el proyecto final y después abre el examen acumulativo.'});
  }
  const items = prepareQuestions(bank);
- if (final) {
-   const result = await startFinalExam(db,req.user,shuffle(items));
+ if (kind === 'long') {
+   const result = await startFinalExam(db,req.user,shuffle(items),req.module.id);
    return res.status(result.status).json(result.body);
  }
  res.json(await startUnitExam(db,req.user,req.module.id,kind,items));
@@ -189,22 +190,22 @@ app.post('/api/modules/:id/exam/submit',async(req,res)=>{
  if (typeof id !== 'string' || !Array.isArray(answers) || answers.some(answer => !Number.isInteger(answer))) {
    return res.status(400).json({error:'Selecciona una respuesta para cada pregunta.'});
  }
- if (req.module.id === 8 && id.startsWith('final-')) {
+ if (id.startsWith('final-') || id.startsWith('unit-')) {
    if (!mustUnlock(req,res,'long')) return;
    const result = await finishFinalExam(db,req.user,id,answers,async (client,questions,final) => {
      const {rows:[{project_score}]} = await client.query(
        "SELECT MAX(score)::float AS project_score FROM attempts WHERE user_id=$1 AND module=8 AND kind='practice' AND owner_preview=$2",
        [req.user.id,req.user.is_owner]
      );
-     if (!Number.isFinite(project_score)) return null;
+     if (req.module.id===8 && !Number.isFinite(project_score)) return null;
      const report = examReport(questions,answers);
      report.examScore = report.score;
-     report.projectScore = project_score;
-     report.note = 'Para aprobar el módulo final se exige un mínimo de 80 en el examen y en el proyecto.';
+     report.projectScore = req.module.id===8 ? project_score : undefined;
+     report.note = req.module.id===8 ? 'Para aprobar el módulo final se exige un mínimo de 80 en el examen y en el proyecto.' : 'Necesitas al menos 80/100 para aprobar esta evaluación. Tienes tres intentos; al agotarlos debes esperar 24 horas.';
      report.final = final;
      await save(req,'long',report,client);
      return report;
-   });
+   },req.module.id);
    return res.status(result.status).json(result.body);
  }
  if (req.moduleProgress) {
@@ -215,7 +216,7 @@ app.post('/api/modules/:id/exam/submit',async(req,res)=>{
    if (challenge && !mustUnlock(req,res,challenge.kind)) return;
  }
  const {rows:[row]} = await db.query(
-   "DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() AND owner_preview=$4 AND jsonb_array_length(answers)=$5 AND NOT (module=8 AND kind='long') RETURNING *",
+   "DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() AND owner_preview=$4 AND jsonb_array_length(answers)=$5 AND kind<>'long' RETURNING *",
    [id,req.user.id,req.module.id,req.user.is_owner,answers.length]
  );
  if (!row) return res.status(400).json({error:'Intento vencido o ya entregado. Inicia otro.'});

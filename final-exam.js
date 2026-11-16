@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS final_exam_sessions(
   expires_at TIMESTAMPTZ NOT NULL,
   finished_at TIMESTAMPTZ
 );
+ALTER TABLE final_exam_sessions ADD COLUMN IF NOT EXISTS module INT NOT NULL DEFAULT 8;
 CREATE INDEX IF NOT EXISTS final_exam_sessions_user_sequence
   ON final_exam_sessions(user_id,owner_preview,sequence DESC);
 `;
@@ -37,25 +38,25 @@ function examAvailability(last, now) {
   };
 }
 
-export async function finalExamStatus(db,user) {
+export async function finalExamStatus(db,user,moduleId=8) {
   const {rows:[row]} = await db.query(
     `SELECT clock_timestamp() AS current_time,last.attempt_number,last.expires_at,last.finished_at,
        latest.exam_score,best.exam_score AS best_exam_score,best.project_score
      FROM (SELECT 1) AS base
      LEFT JOIN LATERAL (
        SELECT attempt_number,expires_at,finished_at FROM final_exam_sessions
-       WHERE user_id=$1 AND owner_preview=$2 ORDER BY sequence DESC LIMIT 1
+       WHERE user_id=$1 AND owner_preview=$2 AND module=$3 ORDER BY sequence DESC LIMIT 1
      ) AS last ON true
      LEFT JOIN LATERAL (
        SELECT COALESCE((feedback->>'examScore')::float,score::float) AS exam_score FROM attempts
-       WHERE user_id=$1 AND owner_preview=$2 AND module=8 AND kind='long' ORDER BY id DESC LIMIT 1
+       WHERE user_id=$1 AND owner_preview=$2 AND module=$3 AND kind='long' ORDER BY id DESC LIMIT 1
      ) AS latest ON true
      LEFT JOIN LATERAL (
        SELECT MAX(COALESCE((feedback->>'examScore')::float,score::float)) FILTER (WHERE kind='long') AS exam_score,
           (MAX(score) FILTER (WHERE kind='practice'))::float AS project_score
-       FROM attempts WHERE user_id=$1 AND owner_preview=$2 AND module=8
+       FROM attempts WHERE user_id=$1 AND owner_preview=$2 AND module=$3
      ) AS best ON true`,
-    [user.id,user.is_owner]
+    [user.id,user.is_owner,moduleId]
   );
   return {
     ...examAvailability(row,row.current_time),
@@ -91,12 +92,12 @@ function resume(row,now) {
   };
 }
 
-export function startFinalExam(db,user,questions) {
+export function startFinalExam(db,user,questions,moduleId=8) {
   return withUserLock(db,user,async (client,now) => {
     const {rows:[last]} = await client.query(
       `SELECT id,attempt_number,questions,expires_at,finished_at FROM final_exam_sessions
-       WHERE user_id=$1 AND owner_preview=$2 ORDER BY sequence DESC LIMIT 1`,
-      [user.id,user.is_owner]
+       WHERE user_id=$1 AND owner_preview=$2 AND module=$3 ORDER BY sequence DESC LIMIT 1`,
+      [user.id,user.is_owner,moduleId]
     );
     const status = examAvailability(last,now);
     if (status.status === 'active') return resume(last,now);
@@ -105,19 +106,19 @@ export function startFinalExam(db,user,questions) {
     }
     const attemptNumber = status.attemptsUsed + 1;
     const {rows:[created]} = await client.query(
-      `INSERT INTO final_exam_sessions(id,user_id,owner_preview,attempt_number,questions,expires_at)
-       VALUES($1,$2,$3,$4,$5,$6) RETURNING id,attempt_number,questions,expires_at`,
-      ['final-'+randomBytes(24).toString('hex'),user.id,user.is_owner,attemptNumber,JSON.stringify(questions),after(now,FINAL_DURATION_MS)]
+      `INSERT INTO final_exam_sessions(id,user_id,owner_preview,attempt_number,questions,expires_at,module)
+       VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,attempt_number,questions,expires_at`,
+      [(moduleId===8?'final-':'unit-')+randomBytes(24).toString('hex'),user.id,user.is_owner,attemptNumber,JSON.stringify(questions),after(now,FINAL_DURATION_MS),moduleId]
     );
     return resume(created,now);
   });
 }
 
-export function finishFinalExam(db,user,id,answers,saveReport) {
+export function finishFinalExam(db,user,id,answers,saveReport,moduleId=8) {
   return withUserLock(db,user,async (client,now) => {
     const {rows:[exam]} = await client.query(
-      'SELECT questions,expires_at,finished_at,attempt_number FROM final_exam_sessions WHERE id=$1 AND user_id=$2 AND owner_preview=$3',
-      [id,user.id,user.is_owner]
+      'SELECT questions,expires_at,finished_at,attempt_number FROM final_exam_sessions WHERE id=$1 AND user_id=$2 AND owner_preview=$3 AND module=$4',
+      [id,user.id,user.is_owner,moduleId]
     );
     if (!exam || exam.finished_at || exam.expires_at <= now) {
       return {status:400,body:{error:'Este intento ya terminó o se agotó la hora. Consulta si puedes iniciar otro.'}};

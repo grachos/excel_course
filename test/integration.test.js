@@ -62,12 +62,13 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  }
  const exam=await(await request('/modules/1/exam',{cookie,method:'POST',body:{kind}})).json();
  assert.equal(exam.questions.length,kind==='long'?6:3);
- assert.ok(exam.timing.expiresAt);
- const remaining=Date.parse(exam.timing.expiresAt)-Date.parse(exam.timing.serverNow);
+ const timing=exam.final || exam.timing;
+ assert.ok(timing.expiresAt);
+ const remaining=Date.parse(timing.expiresAt)-Date.parse(timing.serverNow);
  assert.ok(remaining>(kind==='long'?59:29)*60000);
  const resumed=await (await examOf(kind)).json();
  assert.equal(resumed.id,exam.id);
- assert.equal(resumed.timing.expiresAt,exam.timing.expiresAt);
+ assert.equal((resumed.final||resumed.timing).expiresAt,timing.expiresAt);
  assert.deepEqual(resumed.questions,exam.questions);
  const answers=answerFor(1,kind,exam.questions);
  const submit=await request('/modules/1/exam/submit',{cookie,method:'POST',body:{id:exam.id,answers}});
@@ -80,10 +81,28 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal((await request('/modules/2/template',{cookie,clientAddress:sequenceIp})).status,403);
  // Expired unit attempts cannot be submitted; a new attempt gets a new deadline.
  const expiring=await (await examOf('long')).json();
- await clockTestDb.query("UPDATE challenges SET expires=clock_timestamp()-interval '1 second' WHERE id=$1",[expiring.id]);
+ await clockTestDb.query("UPDATE final_exam_sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[expiring.id]);
  assert.equal((await request('/modules/1/exam/submit',{cookie,method:'POST',clientAddress:sequenceIp,body:{id:expiring.id,answers:answerFor(1,'long',expiring.questions)}})).status,400);
  const replacement=await (await examOf('long')).json();
  assert.notEqual(replacement.id,expiring.id);
+ assert.equal(replacement.final.attempt,3);
+ const incorrect=answerFor(1,'long',replacement.questions).map((answer,i)=>(answer+1)%replacement.questions[i].options.length);
+ const failure=await (await request('/modules/1/exam/submit',{cookie,method:'POST',clientAddress:sequenceIp,body:{id:replacement.id,answers:incorrect}})).json();
+ assert.equal(failure.score,0);
+ assert.ok(failure.final.availableAt);
+ const unitStatus=await (await request('/modules/1/exam/status',{cookie,clientAddress:sequenceIp})).json();
+ assert.equal(unitStatus.attemptsUsed,3);
+ assert.equal(unitStatus.attemptsRemaining,0);
+ assert.equal(unitStatus.status,'cooldown');
+ assert.equal(unitStatus.lastExamScore,0);
+ assert.equal((await examOf('long')).status,429);
+ assert.equal((await request('/modules/1/exam',{cookie,method:'POST',clientAddress:sequenceIp,body:{kind:'part:1'}})).status,200);
+ await clockTestDb.query("UPDATE final_exam_sessions SET finished_at=clock_timestamp()-interval '25 hours' WHERE id=$1",[replacement.id]);
+ const reset=await (await request('/modules/1/exam/status',{cookie,clientAddress:sequenceIp})).json();
+ assert.equal(reset.attemptsRemaining,3);
+ const resetExam=await (await examOf('long')).json();
+ assert.equal(resetExam.final.attempt,1);
+
  const template = await request('/modules/1/template',{cookie});
  assert.equal(template.status,200);
  assert.match(template.headers.get('content-type'),/^application\/vnd\.openxmlformats/);
@@ -235,7 +254,7 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal(student.approved,1);
  assert.equal((await request('/owner/students/'+student.id,{cookie})).status,403);
  const detail = await (await request('/owner/students/'+student.id,{cookie:cookieB})).json();
- assert.equal(detail.attempts.length,5);
+ assert.equal(detail.attempts.length,6);
  for(const path of ['/owner/report.xlsx','/owner/students/'+student.id+'/report.xlsx']){
  const response = await request(path,{cookie:cookieB});
  assert.equal(response.status,200);
@@ -243,7 +262,7 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const report = new ExcelJS.Workbook();
  await report.xlsx.load(Buffer.from(await response.arrayBuffer()));
  assert.equal(report.worksheets[0].getCell('B2').value,email);
- if(path.includes('/students/'))assert.equal(report.getWorksheet('Intentos y correcciones').rowCount,6);
+ if(path.includes('/students/'))assert.equal(report.getWorksheet('Intentos y correcciones').rowCount,7);
  }
  const patchStudent = (id, changes, cookie = cookieB) =>
    request('/owner/students/'+id,{cookie,method:'PATCH',body:changes});
