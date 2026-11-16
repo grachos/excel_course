@@ -11,8 +11,8 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const child=spawn(process.execPath,['server.js'],{env:{...process.env,APP_ORIGIN:origin,PORT:'3101',NODE_ENV:'test',OPENAI_API_KEY:'',OWNER_SETUP_TOKEN:'test-only-owner-code'},stdio:'inherit'});
  try{
  let ready=false;for(let i=0;i<60;i++){try{ready=(await fetch(origin+'/health')).ok;}catch{}if(ready)break;await new Promise(r=>setTimeout(r,150));}assert.equal(ready,true);
- async function request(path,{cookie,body,method='GET',raw=false,originOverride=origin}={}){
- const headers={Origin:originOverride};if(cookie)headers.Cookie=cookie;if(body&&!raw)headers['Content-Type']='application/json';
+ async function request(path,{cookie,body,method='GET',raw=false,originOverride=origin,clientAddress}={}){
+ const headers={Origin:originOverride};if(clientAddress)headers['X-Forwarded-For']=clientAddress;if(cookie)headers.Cookie=cookie;if(body&&!raw)headers['Content-Type']='application/json';
  return fetch(origin+'/api'+path,{method,headers,body:body?(raw?body:JSON.stringify(body)):undefined});
  }
  assert.equal((await request('/me')).status,401);
@@ -98,9 +98,10 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const ownerReportDetail = await (await request('/owner/students/'+previewProfile.user.id,{cookie:cookieB})).json();
  assert.equal(ownerReportDetail.attempts.length,0);
  assert.equal(ownerReportDetail.student.progress[7].score,null);
- const startFinal = () => request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind:'long'}});
+ const finalTestClient = {cookie:cookieB,method:'POST',clientAddress:'198.51.100.12'};
+ const startFinal = () => request('/modules/8/exam',{...finalTestClient,body:{kind:'long'}});
  const submitFinal = (exam,answers=answerFor(8,'long',exam.questions)) =>
-   request('/modules/8/exam/submit',{cookie:cookieB,method:'POST',body:{id:exam.id,answers}});
+   request('/modules/8/exam/submit',{...finalTestClient,body:{id:exam.id,answers}});
  const [second,resumed] = await Promise.all([startFinal(),startFinal()]).then(responses=>Promise.all(responses.map(r=>r.json())));
  assert.equal(second.final.attempt,2);
  assert.equal(second.id,resumed.id);
@@ -123,6 +124,18 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const renewed = await (await startFinal()).json();
  assert.equal(renewed.final.attempt,1);
  assert.notEqual(renewed.id,third.id);
+ const expire = async exam => (await clockTestDb.query(
+   "UPDATE final_exam_sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1 RETURNING expires_at",[exam.id]
+ )).rows[0].expires_at;
+ await expire(renewed);
+ const renewedSecond = await (await startFinal()).json();
+ await expire(renewedSecond);
+ const renewedThird = await (await startFinal()).json();
+ assert.equal(renewedThird.final.attempt,3);
+ const thirdExpiry = await expire(renewedThird);
+ const expiryLock = await startFinal();
+ assert.equal(expiryLock.status,429);
+ assert.equal(Date.parse((await expiryLock.json()).availableAt)-thirdExpiry.getTime(),24*60*60*1000);
  const pivotTemplate = await request('/modules/7/template',{cookie:cookieB});
  assert.equal(pivotTemplate.status,200);
  const pivotBook = new ExcelJS.Workbook();
