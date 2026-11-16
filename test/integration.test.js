@@ -25,7 +25,15 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal((await request('/logout',{cookie,method:'POST',originOverride:'https://wrong.example'})).status,403);
  const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('Entrega');sheet.getCell('A1').value='Concepto';sheet.getCell('B1').value='Valor';sheet.getCell('B2').value=800000;
  const form=new FormData();form.append('file',new Blob([await workbook.xlsx.writeBuffer()]),'practice.xlsx');
- const uploaded=await request('/modules/1/practice',{cookie,method:'POST',body:form,raw:true});assert.equal(uploaded.status,200);assert.equal((await uploaded.json()).score,100);
+ const sequenceIp='198.51.100.23';
+ const examOf = kind => request('/modules/1/exam',{cookie,method:'POST',clientAddress:sequenceIp,body:{kind}});
+ const skipPart=await examOf('part:2');
+ assert.equal(skipPart.status,403);
+ assert.match((await skipPart.json()).error,/examen de la parte 1/);
+ assert.equal((await request('/modules/1/template',{cookie,clientAddress:sequenceIp})).status,403);
+ assert.equal((await request('/modules/1/practice',{cookie,method:'POST',clientAddress:sequenceIp,body:form,raw:true})).status,403);
+ const noPractice=await examOf('long');
+ assert.equal(noPractice.status,403);
  const outline=await (await request('/modules',{cookie})).json();
  assert.equal(outline.length,8);
  assert.equal(outline[0].parts.length,3);
@@ -41,6 +49,15 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
    });
  };
  for(const kind of [...partKinds,'long']){
+ if(kind==='long'){
+   const lockedExam=await examOf('long');
+   assert.equal(lockedExam.status,403);
+   assert.match((await lockedExam.json()).error,/Primero entrega la práctica/);
+   const statusBeforePractice=await (await request('/me',{cookie,clientAddress:sequenceIp})).json();
+   assert.equal(statusBeforePractice.progress[0].blocks.practice,undefined);
+   assert.match(statusBeforePractice.progress[0].blocks.long,/Primero entrega la práctica/);
+   const uploaded=await request('/modules/1/practice',{cookie,method:'POST',body:form,raw:true});assert.equal(uploaded.status,200);assert.equal((await uploaded.json()).score,100);
+ }
  const exam=await(await request('/modules/1/exam',{cookie,method:'POST',body:{kind}})).json();
  assert.equal(exam.questions.length,kind==='long'?6:3);
  const answers=answerFor(1,kind,exam.questions);
@@ -50,10 +67,12 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  }
  const firstProgress=await (await request('/me',{cookie})).json();
  assert.equal(firstProgress.progress[0].scores.short,100);
- const template = await request('/modules/2/template',{cookie});
+ assert.equal((await request('/modules/2/exam',{cookie,method:'POST',clientAddress:sequenceIp,body:{kind:'part:1'}})).status,200);
+ assert.equal((await request('/modules/2/template',{cookie,clientAddress:sequenceIp})).status,403);
+ const template = await request('/modules/1/template',{cookie});
  assert.equal(template.status,200);
  assert.match(template.headers.get('content-type'),/^application\/vnd\.openxmlformats/);
- assert.equal(template.headers.get('content-disposition').replaceAll('"',''),'attachment; filename=practica-2.xlsx');
+ assert.equal(template.headers.get('content-disposition').replaceAll('"',''),'attachment; filename=practica-1.xlsx');
  assert.equal(template.headers.get('cache-control'),'private, no-store');
  const templateBook = new ExcelJS.Workbook();
  await templateBook.xlsx.load(Buffer.from(await template.arrayBuffer()));

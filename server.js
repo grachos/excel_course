@@ -11,6 +11,7 @@ import {randomBytes,createHash} from 'node:crypto';
 import yauzl from 'yauzl';
 import {modules} from './course.js';
 import {gradeChecks} from './grading.js';
+import {activityBlocks} from './activity-sequence.js';
 import {examQuestions, moduleOutline} from './lessons.js';
 import {finalExamSchema, finalExamStatus, finishFinalExam, startFinalExam} from './final-exam.js';
 import {gradePivot, pivotSource} from './pivot.js';
@@ -76,7 +77,7 @@ async function state(user){
  const rows=(await db.query(`SELECT module,kind,MAX(CASE WHEN module=8 AND kind='long'
    THEN COALESCE((feedback->>'examScore')::float,score::float) ELSE score::float END) AS score
    FROM attempts WHERE user_id=$1 AND owner_preview=$2 GROUP BY module,kind`,[user.id,user.is_owner])).rows;
- return progressFromScores(rows);
+ return progressFromScores(rows).map(result=>({...result,blocks:activityBlocks(result,user.is_owner)}));
 }
 app.get('/api/me',async(req,res)=>res.json({user:safeUser(req.user),progress:await state(req.user),aiConfigured:tutorConfigured(),...(await ownerStatus(db,req.user.id))}));
 mountOwner(app, db);
@@ -88,6 +89,7 @@ app.use('/api/modules/:id',async(req,res,next)=>{
  if(!req.module)return res.sendStatus(404);
  if(req.user.is_owner)return next();
  const progress=await state(req.user);
+ req.moduleProgress=progress[req.module.id-1];
  const prerequisite=progress.slice(0,req.module.id-1).find(module=>!module.passed);
  if(prerequisite){
    return res.status(403).json({error:'Para abrir el módulo '+req.module.id+', aprueba primero el módulo '+prerequisite.id+' con al menos 80/100.'});
@@ -95,7 +97,18 @@ app.use('/api/modules/:id',async(req,res,next)=>{
  next();
 });
 async function save(req,kind,report,client=db){await client.query('INSERT INTO attempts(user_id,module,kind,score,feedback,owner_preview) VALUES($1,$2,$3,$4,$5,$6)',[req.user.id,req.module.id,kind,report.score,JSON.stringify(report),req.user.is_owner]);}
-app.get('/api/modules/:id/template',async(req,res)=>{
+function mustUnlock(req,res,kind) {
+ const reason=req.moduleProgress?.blocks[kind];
+ if (!reason) return true;
+ res.status(403).json({error:reason});
+ return false;
+}
+
+function requirePractice(req,res,next) {
+ if (mustUnlock(req,res,'practice')) next();
+}
+
+app.get('/api/modules/:id/template',requirePractice,async(req,res)=>{
  const w = new ExcelJS.Workbook();
  const guide = w.addWorksheet('Guía');
  guide.addRows([[req.module.title],[req.module.task]]);
@@ -132,7 +145,7 @@ function zipSafe(buffer){return new Promise((resolve,reject)=>yauzl.fromBuffer(b
  let total=0,count=0;z.on('error',reject);z.on('entry',e=>{total+=e.uncompressedSize;count++;if(total>20*1024*1024||count>1500||e.generalPurposeBitFlag&1){z.close();return reject(Error('Archivo demasiado complejo o cifrado.'));}z.readEntry();});z.on('end',resolve);z.readEntry();
 }));}
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:2*1024*1024,files:1,fields:0}});
-app.post('/api/modules/:id/practice',rateLimit({windowMs:60000,limit:5}),upload.single('file'),async(req,res)=>{
+app.post('/api/modules/:id/practice',requirePractice,rateLimit({windowMs:60000,limit:5}),upload.single('file'),async(req,res)=>{
  if(!req.file||!req.file.originalname.toLowerCase().endsWith('.xlsx'))return res.status(400).json({error:'Entrega un archivo .xlsx de hasta 2 MB.'});
  let w=new ExcelJS.Workbook();
  try{await zipSafe(req.file.buffer);await w.xlsx.load(req.file.buffer);}catch{return res.status(400).json({error:'No se pudo leer el archivo. Usa un XLSX válido, sin cifrar, de hasta 2 MB y 20 MB descomprimido.'});}
@@ -181,6 +194,7 @@ app.post('/api/modules/:id/exam',async(req,res)=>{
  const kind = req.body?.kind;
  const bank = examQuestions(req.module.id, kind);
  if (!bank) return res.status(400).json({error:'Selecciona un examen válido.'});
+ if (!mustUnlock(req,res,kind)) return;
  const final = req.module.id === 8 && kind === 'long';
  if (final && !Number.isFinite((await state(req.user))[7].scores.practice)) {
    return res.status(400).json({error:'Entrega primero el proyecto final y después abre el examen acumulativo.'});
@@ -205,6 +219,7 @@ app.post('/api/modules/:id/exam/submit',async(req,res)=>{
    return res.status(400).json({error:'Selecciona una respuesta para cada pregunta.'});
  }
  if (req.module.id === 8 && id.startsWith('final-')) {
+   if (!mustUnlock(req,res,'long')) return;
    const result = await finishFinalExam(db,req.user,id,answers,async (client,questions,final) => {
      const {rows:[{project_score}]} = await client.query(
        "SELECT MAX(score)::float AS project_score FROM attempts WHERE user_id=$1 AND module=8 AND kind='practice' AND owner_preview=$2",
@@ -220,6 +235,13 @@ app.post('/api/modules/:id/exam/submit',async(req,res)=>{
      return report;
    });
    return res.status(result.status).json(result.body);
+ }
+ if (req.moduleProgress) {
+   const {rows:[challenge]} = await db.query(
+     'SELECT kind FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND owner_preview=$4',
+     [id,req.user.id,req.module.id,req.user.is_owner]
+   );
+   if (challenge && !mustUnlock(req,res,challenge.kind)) return;
  }
  const {rows:[row]} = await db.query(
    "DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() AND owner_preview=$4 AND jsonb_array_length(answers)=$5 AND NOT (module=8 AND kind='long') RETURNING *",

@@ -51,9 +51,9 @@ function studyPlan(module, result) {
 
   const items=[];
   const add=(title,reason,target)=>items.push({title,reason,target});
-  if (!Number.isFinite(scores.practice)) {
+  if (!Number.isFinite(scores.practice) && !result.blocks?.practice) {
     add('Entrega tu '+practice+'.',final
-      ? 'El examen final se habilita después de recibir tu archivo .xlsx.'
+      ? 'El examen final se habilita cuando tu proyecto tenga al menos 80/100.'
       : 'La práctica vale el 30 % y es necesaria para calcular la nota del módulo.','lesson-practice');
   } else if (final && scores.practice<80) {
     add('Mejora el proyecto final.','Tu mejor nota es '+scoreText(scores.practice)+'. Necesitas al menos 80/100 en el proyecto.','lesson-practice');
@@ -61,7 +61,7 @@ function studyPlan(module, result) {
 
   if (!Number.isFinite(scores.short)) {
     module.parts.forEach((part,index)=>{
-      if (!Number.isFinite(scores[part.kind])) {
+      if (!Number.isFinite(scores[part.kind]) && !result.blocks?.[part.kind]) {
         add('Presenta el examen de la parte '+(index+1)+'.',part.title+'. El promedio de las partes vale el 20 %.','lesson-part-'+(index+1));
       }
     });
@@ -69,8 +69,8 @@ function studyPlan(module, result) {
 
   if (!Number.isFinite(scores.long)) {
     add(final && !Number.isFinite(scores.practice) ? 'El examen final está pendiente del proyecto.' : 'Presenta '+(final?'el ':'la ')+assessment+'.', final
-      ? 'Dura hasta 60 minutos y necesitas al menos 80/100.'
-      : 'Vale el 50 % del módulo. El contador de 60 minutos se usa en el examen final del módulo 8.','lesson-assessment');
+      ? (result.blocks?.long || 'Dura hasta 60 minutos y necesitas al menos 80/100.')
+      : (result.blocks?.long ? result.blocks.long+' ' : '')+'Vale el 50 % del módulo. El contador de 60 minutos se usa en el examen final del módulo 8.','lesson-assessment');
   } else if (final && scores.long<80) {
     add('Repite el examen final.','Tu mejor nota es '+scoreText(scores.long)+'. Consulta tus intentos y la hora de reintento si están agotados.','lesson-assessment');
   }
@@ -105,14 +105,24 @@ function renderStudyPlan(module,result) {
       : (ownerAccess ? '' : '<p>'+esc(passMessage)+'</p>'));
 }
 
-function renderParts(module, scores) {
+function controlState(blocks,kind) {
+  const reason=blocks?.[kind];
+  return {disabled:reason?' disabled':'',reason:reason??''};
+}
+
+function renderBlockMessage(kind,reason) {
+  return '<p class="activity-block muted" data-block-message="'+kind+'"'+(reason?'':' hidden')+'>'+esc(reason)+'</p>';
+}
+
+function renderParts(module, scores, blocks) {
   return module.parts.map((part,index) =>
     '<details class="card lesson-part" id="lesson-part-'+(index+1)+'"' + (index === 0 ? ' open' : '') + '><summary><strong>Parte ' +
     (index + 1) + ' · ' + esc(part.title) + '</strong><span class="pill" data-score-kind="' + part.kind + '">' +
     scoreText(scores[part.kind]) + '</span></summary><p>' + esc(part.lesson) + '</p>' +
     '<div class="lesson-example"><strong>Prueba este ejemplo</strong><p>' + esc(part.example) + '</p></div>' +
     '<section class="course-demo part-demo" data-part-demo="'+(index+1)+'" aria-label="Ejemplo visual de la parte"><p>Cargando ejemplo visual…</p></section>' +
-    '<button type="button" data-exam="' + part.kind + '">Examen de la parte · 3 preguntas</button>' +
+    '<button type="button" data-exam="' + part.kind + '" data-block-kind="'+part.kind+'"'+controlState(blocks,part.kind).disabled+'>Examen de la parte · 3 preguntas</button>' +
+    renderBlockMessage(part.kind,controlState(blocks,part.kind).reason) +
     '<div data-quiz="' + part.kind + '"></div></details>'
   ).join('');
 }
@@ -129,6 +139,9 @@ function lesson(id) {
   const m=current;
   const result=progress[id-1];
   const scores=result.scores;
+  const blocks=result.blocks;
+  const practice=controlState(blocks,'practice');
+  const assessment=controlState(blocks,'long');
   const final=m.id===8;
   const examTitle=final?'Examen final acumulativo':'Evaluación de unidad';
   const toolGuide=user.tool==='excel'
@@ -141,12 +154,13 @@ function lesson(id) {
     '<span class="pill">'+(user.tool==='excel'?'Ruta Excel Online':'Ruta Google Sheets')+'</span>' +
     '<p class="muted">En cada parte, revisa el ejemplo visual antes de presentar su examen.</p>' +
     '<section id="study-next" class="card study-next" aria-label="Tu siguiente paso">'+renderStudyPlan(m,result)+'</section>' +
-    renderParts(m,scores)+'<details class="card"><summary>Repaso y referencias rápidas</summary>'+m.guide.map(text=>'<p>'+esc(text)+'</p>').join('')+'</details>'+officialExamples(m) +
+    renderParts(m,scores,blocks)+'<details class="card"><summary>Repaso y referencias rápidas</summary>'+m.guide.map(text=>'<p>'+esc(text)+'</p>').join('')+'</details>'+officialExamples(m) +
     '<section class="card" id="lesson-practice"><h2>Manos a la hoja</h2><p>'+esc(m.task)+'</p>'+platformGuide(m)+'<p>'+esc(toolGuide)+'</p>' +
-    '<button type="button" class="primary" data-template="'+m.id+'">↓ Descargar plantilla</button>' +
+    '<button type="button" class="primary" data-template="'+m.id+'" data-block-kind="practice"'+practice.disabled+'>↓ Descargar plantilla</button>' +
+    renderBlockMessage('practice',practice.reason) +
     '<p id="template-status" class="muted" role="status"></p><form id="practice">' +
-    '<label>Entrega tu práctica · XLSX, máximo 2 MB<input type="file" name="file" accept=".xlsx" required></label>' +
-    '<button class="primary">Revisar mi práctica</button></form>' +
+    '<label>Entrega tu práctica · XLSX, máximo 2 MB<input type="file" name="file" accept=".xlsx" data-block-kind="practice" required'+practice.disabled+'></label>' +
+    '<button class="primary" data-block-kind="practice"'+practice.disabled+'>Revisar mi práctica</button></form>' +
     '<p class="muted">'+esc(m.reviewNote || 'Revisamos los resultados guardados. Los gráficos y el formato requieren revisión adicional.')+'</p>' +
     '<p class="muted">'+(aiConfigured
       ? 'La plataforma verifica el archivo y calcula la nota. Si encuentra errores, el tutor con IA puede explicarte cómo corregirlos.'
@@ -163,7 +177,8 @@ function lesson(id) {
       '<div><span>Tiempo del examen final</span><strong data-exam-clock-digits role="timer">60:00</strong></div>' +
       '<p data-exam-clock-note>El contador empieza cuando inicias un intento.</p></div>' +
       '<div id="final-status" class="final-timing" aria-label="Estado del examen final"><p role="status">Consultando intentos…</p></div>' : '') +
-    '<button type="button" class="primary" data-exam="long"'+(final?' disabled':'')+'>Iniciar '+examTitle.toLowerCase()+'</button>' +
+    '<button type="button" class="primary" data-exam="long" data-block-kind="long"'+(final?' disabled':assessment.disabled)+'>Iniciar '+examTitle.toLowerCase()+'</button>' +
+    renderBlockMessage('long',assessment.reason) +
     '<div data-quiz="long"></div></section></div>';
 
   if (final) syncFinalStatus();
@@ -183,6 +198,16 @@ async function refreshLessonScores(moduleId) {
   const result=progress[moduleId-1];
   const scores=result.scores;
   $('#study-next').innerHTML=renderStudyPlan(current,result);
+  $('#lesson').querySelectorAll('[data-block-kind]').forEach(control=>{
+    if (moduleId!==8 || control.dataset.blockKind!=='long') {
+      control.disabled=Boolean(result.blocks?.[control.dataset.blockKind]);
+    }
+  });
+  $('#lesson').querySelectorAll('[data-block-message]').forEach(message=>{
+    const reason=result.blocks?.[message.dataset.blockMessage];
+    message.textContent=reason??'';
+    message.hidden=!reason;
+  });
   $('#lesson').querySelectorAll('[data-score-kind]').forEach(node => {
     node.textContent=scoreText(scores[node.dataset.scoreKind]);
   });
@@ -223,6 +248,7 @@ async function syncFinalStatus() {
   try {
     const final=await api('/modules/8/exam/status');
     if (request!==finalStatusRequest || !panel.isConnected || $('#lesson').hidden) return;
+    const prerequisite=progress[7]?.blocks?.long;
     const active=final.status==='active';
     const locked=final.status==='cooldown';
     const examPassed=final.bestExamScore>=80;
@@ -244,13 +270,15 @@ async function syncFinalStatus() {
     } else {
       guidance=hasProject ? 'Necesitas 80/100 para aprobar el examen.' : 'Aún no has entregado el proyecto final. Por eso el examen sigue bloqueado. Sube tu archivo .xlsx en «Manos a la hoja».';
     }
+    if (prerequisite && !locked && !active) guidance=prerequisite;
     if (examPassed && locked) guidance+=' '+finalAvailableText(final.availableAt);
     panel.innerHTML='<strong>Intentos utilizados: '+final.attemptsUsed+' de '+final.maxAttempts+'</strong>'+
       '<p>Intentos disponibles: '+final.attemptsRemaining+'</p>'+
       '<p role="status">'+esc(latest+guidance)+'</p>';
-    button.dataset.locked=String(locked || !hasProject);
-    button.disabled=locked || !hasProject;
+    button.dataset.locked=String(locked || !hasProject || Boolean(prerequisite));
+    button.disabled=button.dataset.locked==='true';
     button.textContent=locked ? 'Examen en espera'
+      : prerequisite ? 'Examen final bloqueado'
       : active ? 'Continuar examen final'
       : examPassed ? 'Volver a presentar el examen final'
       : final.attemptsUsed || latest ? 'Reintentar examen final' : 'Iniciar examen final';
@@ -279,8 +307,8 @@ async function syncFinalStatus() {
   } catch (err) {
     if (request!==finalStatusRequest || !panel.isConnected) return;
     panel.textContent='No pudimos consultar el estado. '+err.message;
-    button.dataset.locked='false';
-    button.disabled=false;
+    button.dataset.locked=String(Boolean(progress[7]?.blocks?.long));
+    button.disabled=button.dataset.locked==='true';
   }
 }
 

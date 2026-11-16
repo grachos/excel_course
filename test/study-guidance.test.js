@@ -21,7 +21,7 @@ test('an unfinished module explains missing activities and their effect on appro
 test('the final module explains the project prerequisite before the final can be opened', () => {
   const result=plan({id:8,parts},{passed:false,score:null,scores:{short:100}});
   assert.equal(result.items[0].target,'lesson-practice');
-  assert.match(result.items[0].reason,/se habilita después/);
+  assert.match(result.items[0].reason,/se habilita cuando/);
   assert.match(result.items[1].title,/pendiente del proyecto/);
 });
 
