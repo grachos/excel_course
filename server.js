@@ -1,3 +1,4 @@
+import {prepareQuestions, shuffle} from './exam-options.js';
 import {mountOwner, ownerStatus, progressFromScores} from './owner.js';
 import {explainPractice, tutorConfigured} from './tutor.js';
 import {hashPassword, loginEmail, validPassword, verifyPassword} from './accounts.js';
@@ -166,13 +167,6 @@ app.post('/api/modules/:id/practice',requirePractice,rateLimit({windowMs:60000,l
  }
  await save(req,'practice',report);res.json(report);
 });
-function shuffle(list) {
- for (let i = list.length-1; i > 0; i--) {
-   const j = randomBytes(1)[0] % (i+1);
-   [list[i],list[j]] = [list[j],list[i]];
- }
- return list;
-}
 
 function examReport(questions, answers) {
  const details = questions.map((question,index) => ({
@@ -199,10 +193,7 @@ app.post('/api/modules/:id/exam',async(req,res)=>{
  if (final && !Number.isFinite((await state(req.user))[7].scores.practice)) {
    return res.status(400).json({error:'Entrega primero el proyecto final y después abre el examen acumulativo.'});
  }
- const items = bank.map(question => ({
-   question:question.question, explanation:question.explanation,
-   options:shuffle(question.options.map((text,index) => ({text,correct:index===question.correct})))
- }));
+ const items = prepareQuestions(bank);
  if (final) {
    const result = await startFinalExam(db,req.user,shuffle(items));
    return res.status(result.status).json(result.body);
