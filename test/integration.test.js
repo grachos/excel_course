@@ -32,7 +32,7 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const template = await request('/modules/2/template',{cookie});
  assert.equal(template.status,200);
  assert.match(template.headers.get('content-type'),/^application\/vnd\.openxmlformats/);
- assert.match(template.headers.get('content-disposition'),/attachment; filename="practica-2\.xlsx"/);
+ assert.equal(template.headers.get('content-disposition').replaceAll('"',''),'attachment; filename=practica-2.xlsx');
  assert.equal(template.headers.get('cache-control'),'private, no-store');
  const templateBook = new ExcelJS.Workbook();
  await templateBook.xlsx.load(Buffer.from(await template.arrayBuffer()));
