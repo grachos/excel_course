@@ -12,7 +12,7 @@ import yauzl from 'yauzl';
 import {modules} from './course.js';
 import {gradeChecks} from './grading.js';
 import {examQuestions, moduleOutline} from './lessons.js';
-import {finalExamSchema, finishFinalExam, startFinalExam} from './final-exam.js';
+import {finalExamSchema, finalExamStatus, finishFinalExam, startFinalExam} from './final-exam.js';
 import {gradePivot, pivotSource} from './pivot.js';
 const app=express(), db=new pg.Pool({connectionString:process.env.DATABASE_URL});
 const origin=process.env.APP_ORIGIN;
@@ -73,7 +73,9 @@ app.use('/api',async(req,res,next)=>{
  if(!req.user)return res.status(401).json({error:'La sesión expiró.'});req.token=token;next();
 });
 async function state(user){
- const rows=(await db.query('SELECT module,kind,MAX(score)::float AS score FROM attempts WHERE user_id=$1 AND owner_preview=$2 GROUP BY module,kind',[user.id,user.is_owner])).rows;
+ const rows=(await db.query(`SELECT module,kind,MAX(CASE WHEN module=8 AND kind='long'
+   THEN COALESCE((feedback->>'examScore')::float,score::float) ELSE score::float END) AS score
+   FROM attempts WHERE user_id=$1 AND owner_preview=$2 GROUP BY module,kind`,[user.id,user.is_owner])).rows;
  return progressFromScores(rows);
 }
 app.get('/api/me',async(req,res)=>res.json({user:safeUser(req.user),progress:await state(req.user),aiConfigured:tutorConfigured(),...(await ownerStatus(db,req.user.id))}));
@@ -165,6 +167,12 @@ function examReport(questions, answers) {
  return {score:100*details.filter(detail => detail.ok).length/details.length,details};
 }
 
+app.get('/api/modules/:id/exam/status',async(req,res)=>{
+ if (req.module.id !== 8) return res.status(404).json({error:'Estado disponible solo para el examen final.'});
+ res.set('Cache-Control','private, no-store');
+ res.json(await finalExamStatus(db,req.user));
+});
+
 app.post('/api/modules/:id/exam',async(req,res)=>{
  const kind = req.body?.kind;
  const bank = examQuestions(req.module.id, kind);
@@ -202,7 +210,6 @@ app.post('/api/modules/:id/exam/submit',async(req,res)=>{
      const report = examReport(questions,answers);
      report.examScore = report.score;
      report.projectScore = project_score;
-     report.score = Math.min(report.examScore,project_score);
      report.note = 'Para aprobar el módulo final se exige un mínimo de 80 en el examen y en el proyecto.';
      report.final = final;
      await save(req,'long',report,client);

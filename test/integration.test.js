@@ -69,6 +69,12 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
    assert.equal((await request('/modules/'+id+'/template',{cookie:cookieB})).status,200);
  }
  assert.equal((await request('/modules/8/template',{cookie})).status,403);
+ const getFinalStatus = () => request('/modules/8/exam/status',{cookie:cookieB,clientAddress:'198.51.100.12'}).then(r=>r.json());
+ const initialFinal = await getFinalStatus();
+ assert.equal(initialFinal.status,'ready');
+ assert.equal(initialFinal.attemptsUsed,0);
+ assert.equal(initialFinal.attemptsRemaining,3);
+ assert.equal(initialFinal.projectScore,null);
  assert.equal((await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind:'long'}})).status,400);
  const practiceBook = new ExcelJS.Workbook();
  const practiceSheet = practiceBook.addWorksheet('Entrega');
@@ -83,6 +89,11 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
    assert.equal(exam.questions.length,kind==='long'?16:3);
    if (kind==='long') {
      assert.equal(exam.final.attempt,1);
+     const liveFinal = await getFinalStatus();
+     assert.equal(liveFinal.status,'active');
+     assert.equal(liveFinal.attemptsUsed,1);
+     assert.equal(liveFinal.attemptsRemaining,2);
+     assert.equal(liveFinal.expiresAt,exam.final.expiresAt);
      assert.equal(Date.parse(exam.final.expiresAt)-Date.parse(exam.final.serverNow),60*60*1000);
    }
    const answers = answerFor(8,kind,exam.questions);
@@ -113,14 +124,27 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal((await submitFinal(second)).status,400);
  const third = await (await startFinal()).json();
  assert.equal(third.final.attempt,3);
- const thirdResponse = await submitFinal(third);
+ const wrongAnswers=answerFor(8,'long',third.questions).map((answer,index)=>
+   (answer+1)%third.questions[index].options.length);
+ const thirdResponse = await submitFinal(third,wrongAnswers);
  assert.equal(thirdResponse.status,200);
  const thirdReport = await thirdResponse.json();
  const locked = await startFinal();
  assert.equal(locked.status,429);
  assert.equal((await locked.json()).availableAt,thirdReport.final.availableAt);
+ const lockedStatus = await getFinalStatus();
+ assert.equal(lockedStatus.status,'cooldown');
+ assert.equal(lockedStatus.attemptsUsed,3);
+ assert.equal(lockedStatus.attemptsRemaining,0);
+ assert.equal(lockedStatus.lastExamScore,0);
+ assert.equal(lockedStatus.bestExamScore,100);
+ assert.equal(lockedStatus.availableAt,thirdReport.final.availableAt);
  assert.equal((await submitFinal(third)).status,400);
  await clockTestDb.query("UPDATE final_exam_sessions SET finished_at=clock_timestamp()-interval '25 hours' WHERE id=$1",[third.id]);
+ const readyAgain=await getFinalStatus();
+ assert.equal(readyAgain.status,'ready');
+ assert.equal(readyAgain.attemptsUsed,0);
+ assert.equal(readyAgain.attemptsRemaining,3);
  const renewed = await (await startFinal()).json();
  assert.equal(renewed.final.attempt,1);
  assert.notEqual(renewed.id,third.id);

@@ -30,7 +30,9 @@ const studentsQuery = `
   WHERE id > $1 AND ($2 = '' OR position(lower($2) in lower(name)) > 0 OR position(lower($2) in lower(email)) > 0)
   ORDER BY id LIMIT $3`;
 const scoresQuery = `
-  SELECT user_id,module,kind,MAX(score)::float AS score,MAX(created_at) AS last_activity
+  SELECT user_id,module,kind,MAX(CASE WHEN module=8 AND kind='long'
+    THEN COALESCE((feedback->>'examScore')::float,score::float) ELSE score::float END) AS score,
+    MAX(created_at) AS last_activity
   FROM attempts WHERE user_id = ANY($1::int[]) AND NOT owner_preview
   GROUP BY user_id,module,kind`;
 const attemptsQuery = `

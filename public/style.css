@@ -23,3 +23,5 @@
 
 .final-timing{background:#eef6ef;border:1px solid #d7e8dc;border-radius:8px;padding:10px 14px;margin:12px 0}
 .final-timing p{margin:5px 0 0}.final-timing [role=timer]{font-variant-numeric:tabular-nums}
+
+.final-timing-sticky{position:sticky;top:8px;z-index:2;box-shadow:0 2px 7px #204c3620}

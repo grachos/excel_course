@@ -88,9 +88,11 @@ function lesson(id) {
     '<dl class="lesson-scores"><div><dt>Práctica</dt><dd data-score-kind="practice">'+scoreText(scores.practice)+'</dd></div>' +
     '<div><dt>Nota de partes</dt><dd data-score-kind="short">'+scoreText(scores.short)+'</dd></div>' +
     '<div><dt>'+examTitle+'</dt><dd data-score-kind="long">'+scoreText(scores.long)+'</dd></div></dl>' +
-    '<button type="button" class="primary" data-exam="long">Iniciar '+examTitle.toLowerCase()+'</button>' +
+    (final?'<div id="final-status" class="final-timing" aria-label="Estado del examen final"><p role="status">Consultando intentos…</p></div>':'') +
+    '<button type="button" class="primary" data-exam="long"'+(final?' disabled':'')+'>Iniciar '+examTitle.toLowerCase()+'</button>' +
     '<div data-quiz="long"></div></section></div>';
 
+  if (final) syncFinalStatus();
   const demoContainers = [...$('#lesson').querySelectorAll('[data-part-demo]')];
   for (const container of demoContainers) {
     import('/course-demo.js')
@@ -117,8 +119,87 @@ function finalAvailableText(value) {
   return 'Podrás volver a presentarlo el '+date+' (hora de Colombia).';
 }
 
+function timeRemaining(deadline) {
+  const remaining = Math.max(0,Math.ceil((deadline-performance.now())/1000));
+  return {remaining,text:String(Math.floor(remaining/60)).padStart(2,'0')+':'+String(remaining%60).padStart(2,'0')};
+}
+
+function finalDeadline(instant,serverNow) {
+  return performance.now()+Date.parse(instant)-Date.parse(serverNow);
+}
+
+let finalStatusInterval;
+let finalStatusRequest=0;
+
+async function syncFinalStatus() {
+  const panel=$('#final-status');
+  const button=$('[data-exam="long"]');
+  if (!panel || $('#lesson').hidden) return;
+  const request=++finalStatusRequest;
+  clearInterval(finalStatusInterval);
+  try {
+    const final=await api('/modules/8/exam/status');
+    if (request!==finalStatusRequest || !panel.isConnected || $('#lesson').hidden) return;
+    const active=final.status==='active';
+    const locked=final.status==='cooldown';
+    const examPassed=final.bestExamScore>=80;
+    const hasProject=typeof final.projectScore==='number';
+    const latest=typeof final.lastExamScore==='number'
+      ? 'Última nota: '+scoreText(final.lastExamScore)+'. ' : '';
+    let guidance;
+    if (examPassed) {
+      guidance=final.projectScore>=80 ? 'Ya aprobaste el examen y el proyecto.'
+        : 'Ya aprobaste el examen. Mejora el proyecto hasta alcanzar 80/100.';
+    } else if (active) {
+      guidance='Tu intento sigue en curso. Puedes retomarlo sin gastar otro intento.';
+    } else if (locked) {
+      guidance='Usaste tus tres intentos sin aprobar. '+finalAvailableText(final.availableAt);
+    } else if (final.expiredAt && final.attemptsUsed) {
+      guidance='Se agotó el tiempo del último intento. Debes repetir el examen para aprobar.';
+    } else if (latest) {
+      guidance='Debes repetir el examen y alcanzar al menos 80/100.';
+    } else {
+      guidance=hasProject ? 'Necesitas 80/100 para aprobar el examen.' : 'Entrega el proyecto para poder iniciar el examen.';
+    }
+    if (examPassed && locked) guidance+=' '+finalAvailableText(final.availableAt);
+    panel.innerHTML='<strong>Intentos utilizados: '+final.attemptsUsed+' de '+final.maxAttempts+'</strong>'+
+      '<p>Intentos disponibles: '+final.attemptsRemaining+'</p>'+
+      '<p data-status-clock'+(active?' role="timer"':'')+'></p>'+
+      '<p role="status">'+esc(latest+guidance)+'</p>';
+    button.dataset.locked=String(locked || !hasProject);
+    button.disabled=locked || !hasProject;
+    button.textContent=locked ? 'Examen en espera'
+      : active ? 'Continuar examen final'
+      : examPassed ? 'Volver a presentar el examen final'
+      : final.attemptsUsed || latest ? 'Reintentar examen final' : 'Iniciar examen final';
+
+    if (active || locked) {
+      const deadline=finalDeadline(active?final.expiresAt:final.availableAt,final.serverNow);
+      const clock=panel.querySelector('[data-status-clock]');
+      function draw() {
+        if (!panel.isConnected || $('#lesson').hidden) {
+          clearInterval(finalStatusInterval);
+          return;
+        }
+        const {remaining,text}=timeRemaining(deadline);
+        if (active) clock.textContent='Tiempo restante: '+text;
+        if (!remaining) syncFinalStatus();
+      }
+      finalStatusInterval=setInterval(draw,active?500:1000);
+      draw();
+    } else {
+      panel.querySelector('[data-status-clock]').textContent='Tiempo por intento: 60 minutos.';
+    }
+  } catch (err) {
+    if (request!==finalStatusRequest || !panel.isConnected) return;
+    panel.textContent='No pudimos consultar el estado. '+err.message;
+    button.dataset.locked='false';
+    button.disabled=false;
+  }
+}
+
 function enableFinalTimer(form, final) {
-  const deadline = performance.now() + (Date.parse(final.expiresAt) - Date.parse(final.serverNow));
+  const deadline = finalDeadline(final.expiresAt,final.serverNow);
   const display = form.querySelector('[data-final-timer]');
   const draftKey = 'celda-final-' + form.dataset.id;
   try {
@@ -132,10 +213,8 @@ function enableFinalTimer(form, final) {
   });
   function draw() {
     if (!form.isConnected) return false;
-    const remaining = Math.max(0,Math.ceil((deadline-performance.now())/1000));
-    const minutes = String(Math.floor(remaining/60)).padStart(2,'0');
-    const seconds = String(remaining%60).padStart(2,'0');
-    display.textContent = remaining ? 'Tiempo restante: '+minutes+':'+seconds
+    const {remaining,text} = timeRemaining(deadline);
+    display.textContent = remaining ? 'Tiempo restante: '+text
       : 'Se agotó el tiempo de este intento. Usa el botón del examen para consultar tu siguiente intento.';
     if (!remaining) {
       form.dataset.expired='true';
@@ -157,7 +236,7 @@ async function openQuiz(button) {
   try {
     const data=await api('/modules/'+moduleId+'/exam',{method:'POST',body:JSON.stringify({kind})});
     if(!target?.isConnected)return;
-    const header = data.final ? '<div class="final-timing"><strong>Intento '+data.final.attempt+' de '+data.final.maxAttempts+
+    const header = data.final ? '<div class="final-timing final-timing-sticky"><strong>Intento '+data.final.attempt+' de '+data.final.maxAttempts+
       '</strong><p data-final-timer role="timer">Tiempo restante</p></div>' : '';
     target.innerHTML='<form class="quiz-form" data-id="'+data.id+'" data-module-id="'+moduleId+'" data-count="'+data.questions.length+'">' + header +
       data.questions.map((q,i)=>'<fieldset><legend>'+ (i+1) +'. '+esc(q.question)+'</legend>' +
@@ -166,15 +245,17 @@ async function openQuiz(button) {
     if (data.final) {
       button.textContent = 'Continuar examen final';
       enableFinalTimer(target.querySelector('form'),data.final);
+      await syncFinalStatus();
     }
     target.querySelector('input')?.focus();
   } catch(err) {
     if (err.availableAt && target?.isConnected) {
       target.textContent = err.message+' '+finalAvailableText(err.availableAt);
+      if(moduleId===8 && kind==='long')await syncFinalStatus();
     } else {
       error(err);
     }
-  } finally { button.disabled=false; }
+  } finally { button.disabled=button.dataset.locked==='true'; }
 }
 function reportHTML(r){return '<div class="feedback"><h3>'+scoreText(r.score)+' · '+(r.score>=80?'Meta alcanzada':'Sigue practicando')+'</h3>'+(r.mode?'<span class="pill">'+(r.mode==='ai'?'Explicación con IA':'Corrección automática por reglas')+'</span>':'')+r.details.map(d=>'<p class="'+(d.ok?'good':'bad')+'">'+(d.ok?'✓ ':'↳ ')+esc(d.cell||d.question)+': '+esc(d.message)+(d.correctAnswer&&!d.ok?' Respuesta correcta: '+esc(d.correctAnswer):'')+'</p>').join('')+(r.tutor?'<p>'+esc(r.tutor)+'</p>':'')+(typeof r.examScore==='number'?'<p>Examen: '+scoreText(r.examScore)+' · Proyecto: '+scoreText(r.projectScore)+'</p>':'')+(r.note?'<p class="muted">'+esc(r.note)+'</p>':'')+'</div>';}
 const activityNames = {practice:'Práctica',short:'Examen corto',long:'Evaluación de unidad',
@@ -374,6 +455,7 @@ document.addEventListener('submit',async e=>{
    const result=await api('/modules/'+moduleId+'/practice',{method:'POST',body:new FormData(form)});
    if(target.isConnected)target.innerHTML=reportHTML(result);
    await refreshLessonScores(moduleId);
+   if(moduleId===8)await syncFinalStatus();
  }
  if(form.classList.contains('quiz-form')){
    const data=new FormData(form);
@@ -382,15 +464,16 @@ document.addEventListener('submit',async e=>{
    const answers=Array.from({length:Number(form.dataset.count)},(_,i)=>Number(data.get('q'+i)));
    const result=await api('/modules/'+moduleId+'/exam/submit',{method:'POST',body:JSON.stringify({id:form.dataset.id,answers})});
    if(form.isConnected) {
-     target.innerHTML=reportHTML(result)+(result.final?.availableAt
-       ? '<p class="final-timing">'+esc(finalAvailableText(result.final.availableAt))+'</p>' : '');
+     const retry=result.final && result.examScore<80 && (progress[7].scores.long??0)<80
+       ? '<p class="final-timing"><strong>Debes repetir el examen.</strong> '+esc(result.final.availableAt
+         ? finalAvailableText(result.final.availableAt) : 'Necesitas al menos 80/100 para aprobar.')+'</p>' : '';
+     target.innerHTML=reportHTML(result)+retry;
      if (result.final) {
-       const startButton=$('[data-exam="long"]');
-       if (startButton) startButton.textContent='Iniciar otro intento del examen final';
        try { sessionStorage.removeItem('celda-final-'+form.dataset.id); } catch {}
      }
    }
    await refreshLessonScores(moduleId);
+   if(result.final)await syncFinalStatus();
  }
  }catch(e){error(e);}finally{btn.disabled=form.dataset.expired==='true';}
 });
