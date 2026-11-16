@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
     "test": "node --test",
-    "check": "node --check server.js && node --check public/app.js"
+    "check": "node --check server.js && node --check public/app.js && node --check public/course-demo.js && node --check scripts/build-demos.js",
+    "build:demos": "node scripts/build-demos.js",
+    "postinstall": "npm run build:demos"
   },
   "dependencies": {
     "express": "^5.1.0",
@@ -18,6 +20,7 @@
     "multer": "^2.0.2",
     "helmet": "^8.1.0",
     "express-rate-limit": "^8.1.0",
-    "yauzl": "^3.2.0"
+    "yauzl": "^3.2.0",
+    "sharp": "^0.34.5"
   }
 }
