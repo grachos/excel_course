@@ -59,3 +59,10 @@ test('dashboard requires a chart object, not a cell saying chart',()=>{
  assert.equal(gradePractice(w,modules[7]).details.find(d=>d.cell==='Gráfico').ok,false);
  assert.equal(gradePractice(w,modules[7],{hasChart:true}).details.find(d=>d.cell==='Gráfico').ok,true);
 });
+
+test('zero-valued formula results survive export and are graded correctly',async()=>{
+ const w=workbook(8),s=w.getWorksheet('Entrega');
+ s.getCell('D8').value={formula:'D2-D2',result:0};
+ const loaded=new ExcelJS.Workbook();await loaded.xlsx.load(await w.xlsx.writeBuffer());
+ assert.equal(gradePractice(loaded,modules[7]).details.find(d=>d.cell==='D8').ok,true);
+});

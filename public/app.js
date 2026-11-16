@@ -155,7 +155,7 @@ function lesson(id) {
     '<p class="muted">En cada parte, revisa el ejemplo visual antes de presentar su examen.</p>' +
     '<section id="study-next" class="card study-next" aria-label="Tu siguiente paso">'+renderStudyPlan(m,result)+'</section>' +
     renderParts(m,scores,blocks)+'<details class="card"><summary>Repaso y referencias rápidas</summary>'+m.guide.map(text=>'<p>'+esc(text)+'</p>').join('')+'</details>'+officialExamples(m) +
-    '<section class="card" id="lesson-practice"><h2>Manos a la hoja</h2><p>'+esc(m.task)+'</p>'+platformGuide(m)+'<p>'+esc(toolGuide)+'</p>' +
+    '<section class="card" id="lesson-practice"><h2>Manos a la hoja</h2><p>'+esc(m.practiceTitle || m.task)+'</p>'+(m.practiceSteps?'<ol>'+m.practiceSteps.map(step=>'<li>'+esc(step)+'</li>').join('')+'</ol>':'')+platformGuide(m)+'<p>'+esc(toolGuide)+'</p>' +
     '<button type="button" class="primary" data-template="'+m.id+'" data-block-kind="practice"'+practice.disabled+'>↓ Descargar plantilla</button>' +
     renderBlockMessage('practice',practice.reason) +
     '<p id="template-status" class="muted" role="status"></p><form id="practice">' +

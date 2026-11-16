@@ -88,7 +88,7 @@ export const practices = [
 ];
 export function enrichPractice(module) {
  const spec=practices[module.id-1];
- return {...module,task:spec.title+'. '+spec.steps.join(' '),
+ return {...module,practiceSteps:spec.steps,practiceTitle:spec.title,task:spec.title+'. '+spec.steps.join(' '),
   checks:spec.checks ?? module.checks,
   reviewNote:'Descarga la plantilla actualizada. Se revisan resultados guardados y los controles indicados en la guía; cuando se pide fórmula, escribir solo el resultado no basta. Guarda desde Excel o Sheets antes de subir. La presentación del gráfico y la calidad de la conclusión requieren revisión del docente.'};
 }

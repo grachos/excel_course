@@ -17,6 +17,8 @@ export function populatePractice(workbook,module) {
  }
  for(let i=1;i<=10;i++)sheet.getColumn(i).width=22;
  const guide=workbook.getWorksheet('Guía');
+ guide.getCell('A2').value=spec.title;
+ for(const step of spec.steps)guide.addRow([step]);
  guide.addRow(['Completa las tres partes: los datos fuente están en Datos y tu trabajo va en Entrega.']);
  guide.addRow(['Las celdas verdes son entregables, no contienen soluciones. Conserva ambas hojas.']);
  guide.addRow(['Fórmulas: se comprueba su presencia y el resultado guardado, no se recalculan ni se certifica su equivalencia.']);
@@ -26,7 +28,7 @@ export function populatePractice(workbook,module) {
  guide.eachRow(row=>{row.getCell(1).alignment={wrapText:true,vertical:'top'};row.height=75;});
  return sheet;
 }
-const cellValue=cell=>cell.value && typeof cell.value==='object' ? cell.value.result : cell.value;
+const cellValue=cell=>cell.formula ? cell.result : cell.value;
 const hasFormula=cell=>Boolean(cell.formula);
 export function gradePractice(workbook,module,{hasChart=false}={}) {
  const sheet=workbook.getWorksheet('Entrega');
