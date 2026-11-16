@@ -19,7 +19,9 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const email='test-'+Date.now()+'@example.com';
  const a=await request('/auth/register',{method:'POST',body:{email,password:'integration-password',name:'Ana',tool:'excel'}});assert.equal(a.status,200);
  const cookie=a.headers.get('set-cookie').split(';')[0];
- assert.equal((await request('/modules/2/template',{cookie})).status,403);
+ const blocked=await request('/modules/2/template',{cookie});
+ assert.equal(blocked.status,403);
+ assert.match((await blocked.json()).error,/aprueba primero el módulo 1/);
  assert.equal((await request('/logout',{cookie,method:'POST',originOverride:'https://wrong.example'})).status,403);
  const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('Entrega');sheet.getCell('A1').value='Concepto';sheet.getCell('B1').value='Valor';sheet.getCell('B2').value=800000;
  const form=new FormData();form.append('file',new Blob([await workbook.xlsx.writeBuffer()]),'practice.xlsx');

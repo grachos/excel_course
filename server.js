@@ -88,7 +88,11 @@ app.use('/api/modules/:id',async(req,res,next)=>{
  if(!req.module)return res.sendStatus(404);
  if(req.user.is_owner)return next();
  const progress=await state(req.user);
- if(progress.slice(0,req.module.id-1).some(p=>!p.passed))return res.status(403).json({error:'Aprueba los módulos anteriores con 80 o más.'});next();
+ const prerequisite=progress.slice(0,req.module.id-1).find(module=>!module.passed);
+ if(prerequisite){
+   return res.status(403).json({error:'Para abrir el módulo '+req.module.id+', aprueba primero el módulo '+prerequisite.id+' con al menos 80/100.'});
+ }
+ next();
 });
 async function save(req,kind,report,client=db){await client.query('INSERT INTO attempts(user_id,module,kind,score,feedback,owner_preview) VALUES($1,$2,$3,$4,$5,$6)',[req.user.id,req.module.id,kind,report.score,JSON.stringify(report),req.user.is_owner]);}
 app.get('/api/modules/:id/template',async(req,res)=>{

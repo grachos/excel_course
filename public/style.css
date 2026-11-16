@@ -38,3 +38,7 @@
 .exam-clock-dock[data-running-out=true]{background:#8c3323;border-color:#ffc3a7}
 @media(max-width:600px){.exam-clock-dock{top:auto;bottom:max(12px,env(safe-area-inset-bottom));gap:12px}
   .quiz-form:has(.exam-clock-dock){padding-bottom:92px}}
+
+.study-next{border-left:4px solid #28724e;background:#f3f9f3}.study-next h2{margin-top:0}
+.study-next-list{padding-left:1.3em}.study-next-list li{margin:12px 0}.study-next-list p{margin:3px 0 6px}
+[id^=lesson-part-],#lesson-practice,#lesson-assessment{scroll-margin-top:16px}
