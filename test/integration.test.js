@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import ExcelJS from 'exceljs';
+import {modules} from '../course.js';
 test('sessions, isolation, workbook review and module unlocking',{skip:!process.env.DATABASE_URL,timeout:30000},async()=>{
  const origin='http://127.0.0.1:3101';
  const child=spawn(process.execPath,['server.js'],{env:{...process.env,APP_ORIGIN:origin,PORT:'3101',NODE_ENV:'test',OPENAI_API_KEY:'',OWNER_SETUP_TOKEN:'test-only-owner-code'},stdio:'inherit'});
@@ -38,6 +39,33 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal((await request('/owner/claim',{cookie:cookieB,method:'POST',body:{token:'test-only-owner-code'}})).status,201);
  assert.equal((await request('/owner/claim',{cookie,method:'POST',body:{token:'test-only-owner-code'}})).status,409);
  assert.equal((await (await request('/me',{cookie:cookieB})).json()).isOwner,true);
+ for (const {id} of modules) {
+   assert.equal((await request('/modules/'+id+'/template',{cookie:cookieB})).status,200);
+ }
+ assert.equal((await request('/modules/8/template',{cookie})).status,403);
+ const practiceBook = new ExcelJS.Workbook();
+ const practiceSheet = practiceBook.addWorksheet('Entrega');
+ for (const {cell,expected} of modules[7].checks) practiceSheet.getCell(cell).value = expected;
+ const ownerPractice = new FormData();
+ ownerPractice.append('file', new Blob([await practiceBook.xlsx.writeBuffer()]), 'project.xlsx');
+ const preview = await request('/modules/8/practice',{cookie:cookieB,method:'POST',body:ownerPractice,raw:true});
+ assert.equal(preview.status,200);
+ assert.equal((await preview.json()).score,100);
+ for (const kind of ['short','long']) {
+   const exam = await (await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind}})).json();
+   const answers = exam.questions.map((q,i) => q.options.indexOf(modules[7].questions[i].options[modules[7].questions[i].correct]));
+   const result = await request('/modules/8/exam/submit',{cookie:cookieB,method:'POST',body:{id:exam.id,answers}});
+   assert.equal(result.status,200);
+   assert.equal((await result.json()).score,100);
+ }
+ const previewProfile = await (await request('/me',{cookie:cookieB})).json();
+ assert.equal(previewProfile.progress[7].passed,true);
+ assert.equal(previewProfile.progress[0].passed,false);
+ const previewHistory = await (await request('/history',{cookie:cookieB})).json();
+ assert.equal(previewHistory.length,3);
+ const ownerReportDetail = await (await request('/owner/students/'+previewProfile.user.id,{cookie:cookieB})).json();
+ assert.equal(ownerReportDetail.attempts.length,0);
+ assert.equal(ownerReportDetail.student.progress[7].score,null);
  const ownerList = await (await request('/owner/students?q='+encodeURIComponent(email),{cookie:cookieB})).json();
  const student = ownerList.students.find(row => row.email === email);
  assert.equal(student.approved,1);

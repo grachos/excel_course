@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INT REFERENCE
 CREATE TABLE IF NOT EXISTS attempts(id SERIAL PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,module INT NOT NULL,kind TEXT NOT NULL,score NUMERIC NOT NULL,feedback JSONB NOT NULL,created_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE IF NOT EXISTS challenges(id TEXT PRIMARY KEY,user_id INT REFERENCES users(id) ON DELETE CASCADE,module INT NOT NULL,kind TEXT NOT NULL,answers JSONB NOT NULL,expires TIMESTAMPTZ NOT NULL);
 CREATE TABLE IF NOT EXISTS platform_owner(singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton), user_id INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT);
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS owner_preview BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS owner_preview BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS attempts_user_id_id ON attempts(user_id,id);`);
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const safeUser=u=>({id:u.id,name:u.name,email:u.email,tool:u.tool});
@@ -63,25 +65,26 @@ app.post('/api/auth/:action',authLimit,async(req,res)=>{
 app.use('/api',async(req,res,next)=>{
  const token=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('session='))?.slice(8);
  if(!token)return res.status(401).json({error:'Inicia sesión.'});
- req.user=(await db.query('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=$1 AND s.expires>now() AND u.active',[hash(token)])).rows[0];
+ req.user=(await db.query('SELECT u.*, EXISTS(SELECT 1 FROM platform_owner o WHERE o.singleton AND o.user_id=u.id) AS is_owner FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=$1 AND s.expires>now() AND u.active',[hash(token)])).rows[0];
  if(!req.user)return res.status(401).json({error:'La sesión expiró.'});req.token=token;next();
 });
-async function state(uid){
- const rows=(await db.query('SELECT module,kind,MAX(score)::float AS score FROM attempts WHERE user_id=$1 GROUP BY module,kind',[uid])).rows;
+async function state(user){
+ const rows=(await db.query('SELECT module,kind,MAX(score)::float AS score FROM attempts WHERE user_id=$1 AND owner_preview=$2 GROUP BY module,kind',[user.id,user.is_owner])).rows;
  return progressFromScores(rows);
 }
-app.get('/api/me',async(req,res)=>res.json({user:safeUser(req.user),progress:await state(req.user.id),aiConfigured:tutorConfigured(),...(await ownerStatus(db,req.user.id))}));
+app.get('/api/me',async(req,res)=>res.json({user:safeUser(req.user),progress:await state(req.user),aiConfigured:tutorConfigured(),...(await ownerStatus(db,req.user.id))}));
 mountOwner(app, db);
 app.post('/api/logout',async(req,res)=>{await db.query('DELETE FROM sessions WHERE token=$1',[hash(req.token)]);res.clearCookie('session',{path:'/'});res.json({ok:true});});
 app.get('/api/modules',(req,res)=>res.json(modules.map(({questions,checks,...m})=>m)));
-app.get('/api/history',async(req,res)=>res.json((await db.query('SELECT id,module,kind,score,feedback,created_at FROM attempts WHERE user_id=$1 ORDER BY id DESC LIMIT 100',[req.user.id])).rows));
+app.get('/api/history',async(req,res)=>res.json((await db.query('SELECT id,module,kind,score,feedback,created_at FROM attempts WHERE user_id=$1 AND owner_preview=$2 ORDER BY id DESC LIMIT 100',[req.user.id,req.user.is_owner])).rows));
 app.use('/api/modules/:id',async(req,res,next)=>{
  req.module=modules[Number(req.params.id)-1];
  if(!req.module)return res.sendStatus(404);
- const progress=await state(req.user.id);
+ if(req.user.is_owner)return next();
+ const progress=await state(req.user);
  if(progress.slice(0,req.module.id-1).some(p=>!p.passed))return res.status(403).json({error:'Aprueba los módulos anteriores con 80 o más.'});next();
 });
-async function save(req,kind,report){await db.query('INSERT INTO attempts(user_id,module,kind,score,feedback) VALUES($1,$2,$3,$4,$5)',[req.user.id,req.module.id,kind,report.score,JSON.stringify(report)]);}
+async function save(req,kind,report){await db.query('INSERT INTO attempts(user_id,module,kind,score,feedback,owner_preview) VALUES($1,$2,$3,$4,$5,$6)',[req.user.id,req.module.id,kind,report.score,JSON.stringify(report),req.user.is_owner]);}
 app.get('/api/modules/:id/template',async(req,res)=>{
  const w=new ExcelJS.Workbook();const guide=w.addWorksheet('Guía');guide.getCell('A1').value=req.module.title;guide.getCell('A2').value=req.module.task;guide.getColumn(1).width=100;guide.getCell('A2').alignment={wrapText:true};guide.getRow(2).height=100;
  const s=w.addWorksheet('Entrega');for(const c of req.module.checks){s.getCell(c.cell).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE7F4ED'}};}
@@ -113,19 +116,19 @@ app.post('/api/modules/:id/exam',async(req,res)=>{
  const options=q.options.map((text,i)=>({text,correct:i===q.correct}));for(let i=options.length-1;i>0;i--){const j=randomBytes(1)[0]%(i+1);[options[i],options[j]]=[options[j],options[i]];}return {...q,options};
  });
  const id=randomBytes(24).toString('hex');
- await db.query("DELETE FROM challenges WHERE user_id=$1 AND (expires<now() OR (module=$2 AND kind=$3))",[req.user.id,req.module.id,kind]);
- await db.query("INSERT INTO challenges VALUES($1,$2,$3,$4,$5,now()+interval '30 minutes')",[id,req.user.id,req.module.id,kind,JSON.stringify(items)]);
+ await db.query("DELETE FROM challenges WHERE user_id=$1 AND (expires<now() OR (module=$2 AND kind=$3 AND owner_preview=$4))",[req.user.id,req.module.id,kind,req.user.is_owner]);
+ await db.query("INSERT INTO challenges(id,user_id,module,kind,answers,expires,owner_preview) VALUES($1,$2,$3,$4,$5,now()+interval '30 minutes',$6)",[id,req.user.id,req.module.id,kind,JSON.stringify(items),req.user.is_owner]);
  res.json({id,questions:items.map(q=>({question:q.question,options:q.options.map(o=>o.text)}))});
 });
 app.post('/api/modules/:id/exam/submit',async(req,res)=>{
  const {id,answers}=req.body;if(typeof id!=='string'||!Array.isArray(answers))return res.sendStatus(400);
- const row=(await db.query('DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() RETURNING *',[id,req.user.id,req.module.id])).rows[0];
+ const row=(await db.query('DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() AND owner_preview=$4 RETURNING *',[id,req.user.id,req.module.id,req.user.is_owner])).rows[0];
  if(!row)return res.status(400).json({error:'Intento vencido o ya entregado. Inicia otro.'});
  const details=row.answers.map((q,i)=>({question:q.question,ok:q.options[answers[i]]?.correct===true,message:q.explanation}));
  const report={score:100*details.filter(d=>d.ok).length/details.length,details};
  // The final long evaluation incorporates the submitted project, so passing requires both.
  if(req.module.id===8&&row.kind==='long'){
- const p=(await state(req.user.id))[7].scores.practice;
+ const p=(await state(req.user))[7].scores.practice;
  if(!Number.isFinite(p)){return res.status(400).json({error:'Entrega primero el proyecto final y vuelve a iniciar el examen.'});}
  report.score=Math.min(report.score,p);
  }

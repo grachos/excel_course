@@ -27,11 +27,11 @@ const studentsQuery = `
   ORDER BY id LIMIT $3`;
 const scoresQuery = `
   SELECT user_id,module,kind,MAX(score)::float AS score,MAX(created_at) AS last_activity
-  FROM attempts WHERE user_id = ANY($1::int[])
+  FROM attempts WHERE user_id = ANY($1::int[]) AND NOT owner_preview
   GROUP BY user_id,module,kind`;
 const attemptsQuery = `
   SELECT id,module,kind,score::float,feedback,created_at FROM attempts
-  WHERE user_id=$1 AND ($2::int IS NULL OR id<$2) ORDER BY id DESC LIMIT $3`;
+  WHERE user_id=$1 AND NOT owner_preview AND ($2::int IS NULL OR id<$2) ORDER BY id DESC LIMIT $3`;
 
 async function summarize(db, users) {
   const {rows} = await db.query(scoresQuery, [users.map(user => user.id)]);
