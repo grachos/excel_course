@@ -11,6 +11,7 @@ import {randomBytes,createHash} from 'node:crypto';
 import yauzl from 'yauzl';
 import {modules} from './course.js';
 import {gradeChecks} from './grading.js';
+import {examQuestions, moduleOutline} from './lessons.js';
 import {gradePivot, pivotSource} from './pivot.js';
 const app=express(), db=new pg.Pool({connectionString:process.env.DATABASE_URL});
 const origin=process.env.APP_ORIGIN;
@@ -76,7 +77,7 @@ async function state(user){
 app.get('/api/me',async(req,res)=>res.json({user:safeUser(req.user),progress:await state(req.user),aiConfigured:tutorConfigured(),...(await ownerStatus(db,req.user.id))}));
 mountOwner(app, db);
 app.post('/api/logout',async(req,res)=>{await db.query('DELETE FROM sessions WHERE token=$1',[hash(req.token)]);res.clearCookie('session',{path:'/'});res.json({ok:true});});
-app.get('/api/modules',(req,res)=>res.json(modules.map(({questions,checks,...m})=>m)));
+app.get('/api/modules',(req,res)=>res.json(modules.map(({questions,checks,...m})=>({...m,...moduleOutline({...m,questions})}))));
 app.get('/api/history',async(req,res)=>res.json((await db.query('SELECT id,module,kind,score,feedback,created_at FROM attempts WHERE user_id=$1 AND owner_preview=$2 ORDER BY id DESC LIMIT 100',[req.user.id,req.user.is_owner])).rows));
 app.use('/api/modules/:id',async(req,res,next)=>{
  req.module=modules[Number(req.params.id)-1];
@@ -145,8 +146,16 @@ app.post('/api/modules/:id/practice',rateLimit({windowMs:60000,limit:5}),upload.
  await save(req,'practice',report);res.json(report);
 });
 app.post('/api/modules/:id/exam',async(req,res)=>{
- const kind=req.body.kind;if(!['short','long'].includes(kind))return res.sendStatus(400);
- const items=req.module.questions.slice(0,kind==='short'?2:4).map(q=>{
+ const kind = req.body?.kind;
+ const bank = examQuestions(req.module.id, kind);
+ if (!bank) return res.status(400).json({error:'Selecciona un examen válido.'});
+ if (req.module.id === 8 && kind === 'long') {
+   const progress = await state(req.user);
+   if (!Number.isFinite(progress[7].scores.practice)) {
+     return res.status(400).json({error:'Entrega primero el proyecto final y después abre el examen acumulativo.'});
+   }
+ }
+ const items=bank.map(q=>{
  const options=q.options.map((text,i)=>({text,correct:i===q.correct}));for(let i=options.length-1;i>0;i--){const j=randomBytes(1)[0]%(i+1);[options[i],options[j]]=[options[j],options[i]];}return {...q,options};
  });
  const id=randomBytes(24).toString('hex');
@@ -155,16 +164,27 @@ app.post('/api/modules/:id/exam',async(req,res)=>{
  res.json({id,questions:items.map(q=>({question:q.question,options:q.options.map(o=>o.text)}))});
 });
 app.post('/api/modules/:id/exam/submit',async(req,res)=>{
- const {id,answers}=req.body;if(typeof id!=='string'||!Array.isArray(answers))return res.sendStatus(400);
- const row=(await db.query('DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() AND owner_preview=$4 RETURNING *',[id,req.user.id,req.module.id,req.user.is_owner])).rows[0];
+ const {id,answers} = req.body ?? {};
+ if (typeof id !== 'string' || !Array.isArray(answers) || answers.some(answer => !Number.isInteger(answer))) {
+   return res.status(400).json({error:'Selecciona una respuesta para cada pregunta.'});
+ }
+ const row=(await db.query('DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() AND owner_preview=$4 AND jsonb_array_length(answers)=$5 RETURNING *',[id,req.user.id,req.module.id,req.user.is_owner,answers.length])).rows[0];
  if(!row)return res.status(400).json({error:'Intento vencido o ya entregado. Inicia otro.'});
- const details=row.answers.map((q,i)=>({question:q.question,ok:q.options[answers[i]]?.correct===true,message:q.explanation}));
+ const details = row.answers.map((question,index) => ({
+   question:question.question,
+   ok:question.options[answers[index]]?.correct === true,
+   message:question.explanation,
+   correctAnswer:question.options.find(option => option.correct)?.text
+ }));
  const report={score:100*details.filter(d=>d.ok).length/details.length,details};
  // The final long evaluation incorporates the submitted project, so passing requires both.
  if(req.module.id===8&&row.kind==='long'){
  const p=(await state(req.user))[7].scores.practice;
  if(!Number.isFinite(p)){return res.status(400).json({error:'Entrega primero el proyecto final y vuelve a iniciar el examen.'});}
- report.score=Math.min(report.score,p);
+ report.examScore=report.score;
+ report.projectScore=p;
+ report.score=Math.min(report.examScore,p);
+ report.note='Para aprobar el módulo final se exige un mínimo de 80 en el examen y en el proyecto.';
  }
  await save(req,row.kind,report);res.json(report);
 });

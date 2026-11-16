@@ -10,7 +10,7 @@ function view(id){for(const s of ['auth','dashboard','lesson','history','owner']
 async function refresh(){const r=await api('/me');user=r.user;progress=r.progress;ownerAccess=r.isOwner;ownerSetup=r.ownerSetupAvailable;$('#nav-owner').hidden=!ownerAccess;$('#identity').textContent=user.name+' · '+(user.tool==='excel'?'Excel Online':'Google Sheets');$('#logout').hidden=false;return r;}
 async function dashboard(){
  try{await refresh();modules=await api('/modules');if(activationRequested&&(ownerAccess||ownerSetup)){activationRequested=false;return ownerAccess?showStudents():showOwnerSetup();}view('dashboard');if(ownerAccess)return showReviewModules();const passed=progress.filter(p=>p.passed).length;const next=modules.find(m=>!progress[m.id-1].passed);
- $('#dashboard').innerHTML='<div class="intro"><p class="eyebrow">TU RUTA · 8 SEMANAS</p><h1>Un paso más cerca,<br><em>'+esc(user.name.split(' ')[0])+'.</em></h1><p>Aprende a tu ritmo. Practica con propósito.</p></div><div class="hero"><span class="pill">EXCEL ONLINE & GOOGLE SHEETS</span><h2>'+(next?'De entender una fórmula<br>a resolver un problema.':'¡Completaste los ocho módulos!')+'</h2><p>'+(next?'Tu próxima parada: '+esc(next.title):'Todos los módulos aprobados con al menos 80/100.')+'</p>'+(next?'<button class="primary" data-module="'+next.id+'">Continuar mi aprendizaje →</button>':'')+'</div><div class="stats"><div class="card"><strong>'+passed+'/8</strong><span>Módulos aprobados</span></div><div class="card"><strong>60 min</strong><span>Dedicación semanal</span></div><div class="card"><strong>80/100</strong><span>Meta por módulo</span></div></div><div class="row"><h2>Tu camino de aprendizaje</h2><span class="muted">De lo básico a tu primer tablero</span></div><progress max="8" value="'+passed+'" aria-label="Módulos aprobados"></progress><p class="muted">30% práctica · 20% examen corto · 50% evaluación de unidad. Proyecto final: mínimo 80.</p><div class="grid">'+modules.map((m,i)=>{const p=progress[i],locked=progress.slice(0,i).some(x=>!x.passed);return '<article class="card module '+(locked?'locked':'')+'"><div class="row"><span class="number">MÓDULO 0'+m.id+'</span><span class="pill">'+(p.passed?'✓ Aprobado':locked?'Bloqueado':m.level)+'</span></div><h3>'+esc(m.title)+'</h3><p>'+esc(m.goal)+'</p><span class="muted">'+(p.score===null?'Sin calificación completa':p.score+'/100')+' · 1 hora</span><button data-module="'+m.id+'" '+(locked?'disabled':'')+'>'+(p.passed?'Repasar módulo':'Abrir módulo →')+'</button></article>';}).join('')+'</div>';
+ $('#dashboard').innerHTML='<div class="intro"><p class="eyebrow">TU RUTA · 8 SEMANAS</p><h1>Un paso más cerca,<br><em>'+esc(user.name.split(' ')[0])+'.</em></h1><p>Aprende a tu ritmo. Practica con propósito.</p></div><div class="hero"><span class="pill">EXCEL ONLINE & GOOGLE SHEETS</span><h2>'+(next?'De entender una fórmula<br>a resolver un problema.':'¡Completaste los ocho módulos!')+'</h2><p>'+(next?'Tu próxima parada: '+esc(next.title):'Todos los módulos aprobados con al menos 80/100.')+'</p>'+(next?'<button class="primary" data-module="'+next.id+'">Continuar mi aprendizaje →</button>':'')+'</div><div class="stats"><div class="card"><strong>'+passed+'/8</strong><span>Módulos aprobados</span></div><div class="card"><strong>60 min</strong><span>Dedicación semanal</span></div><div class="card"><strong>80/100</strong><span>Meta por módulo</span></div></div><div class="row"><h2>Tu camino de aprendizaje</h2><span class="muted">De lo básico a tu primer tablero</span></div><progress max="8" value="'+passed+'" aria-label="Módulos aprobados"></progress><p class="muted">30% práctica · 20% nota de partes · 50% evaluación de unidad. Proyecto final: mínimo 80.</p><div class="grid">'+modules.map((m,i)=>{const p=progress[i],locked=progress.slice(0,i).some(x=>!x.passed);return '<article class="card module '+(locked?'locked':'')+'"><div class="row"><span class="number">MÓDULO 0'+m.id+'</span><span class="pill">'+(p.passed?'✓ Aprobado':locked?'Bloqueado':m.level)+'</span></div><h3>'+esc(m.title)+'</h3><p>'+esc(m.goal)+'</p><span class="muted">'+(p.score===null?'Sin calificación completa':p.score+'/100')+' · 1 hora</span><button data-module="'+m.id+'" '+(locked?'disabled':'')+'>'+(p.passed?'Repasar módulo':'Abrir módulo →')+'</button></article>';}).join('')+'</div>';
  }catch(e){error(e);}
 }
 function showReviewModules() {
@@ -26,16 +26,96 @@ function platformGuide(module) {
  const title = user.tool === 'excel' ? 'Pasos en Excel Online' : 'Pasos en Google Sheets';
  return '<h3>' + title + '</h3><ol>' + steps.map(step => '<li>' + esc(step) + '</li>').join('') + '</ol>';
 }
-function lesson(id){
- current=modules.find(m=>m.id===id);view('lesson');const m=current,p=progress[id-1];
- $('#lesson').innerHTML='<button id="back">← '+(ownerAccess?'Revisar el curso':'Mi curso')+'</button><div class="lesson-body">'+(ownerAccess?'<p class="pill">Modo de revisión · Resultado de prueba</p>':'')+'<p class="eyebrow">MÓDULO '+m.id+' · '+esc(m.level)+'</p><h1>'+esc(m.title)+'</h1><p>'+esc(m.goal)+'</p><span class="pill">'+(user.tool==='excel'?'Ruta Excel Online':'Ruta Google Sheets')+'</span><div class="card"><h2>01 · Comprende y prueba</h2>'+m.guide.map(t=>'<p>'+esc(t)+'</p>').join('')+platformGuide(m)+'<p class="muted">Distribución sugerida: 5 min objetivo, 10 min ejemplo, 15 min práctica, 5 min examen corto, 20 min evaluación y 5 min repaso.</p></div><section class="card course-demo" id="course-demo" aria-label="Ejemplo visual"><p>Cargando ejemplo visual…</p></section><div class="card"><h2>02 · Manos a la hoja</h2><p>'+esc(m.task)+'</p><p>'+(user.tool==='excel'?'Descarga la plantilla, ábrela en Excel Online y guarda una copia XLSX después de recalcular.':'Descarga la plantilla e impórtala en Google Sheets. Al terminar usa Archivo → Descargar → Microsoft Excel (.xlsx).')+'</p><button type="button" class="primary" data-template="'+m.id+'">↓ Descargar plantilla</button><p id="template-status" class="muted" role="status"></p><form id="practice"><label>Entrega tu práctica · XLSX, máximo 2 MB<input type="file" name="file" accept=".xlsx" required></label><button class="primary">Revisar mi práctica</button></form><p class="muted">Revisión inicial de resultados guardados. Gráficos, formato y procedimiento requieren revisión adicional. La IA explica los hallazgos si está configurada; de lo contrario se muestran correcciones por reglas.</p><div id="practice-report"></div></div><div class="card"><h2>03 · Demuestra lo aprendido</h2><p>Examen corto: 2 preguntas. Evaluación de unidad: 4 preguntas. Banco inicial; se ampliará antes del lanzamiento.</p><button data-exam="short">Examen corto · 20%</button> <button data-exam="long">Evaluación de unidad · 50%</button><p class="muted">Práctica: '+(p.scores.practice??'—')+' · Corto: '+(p.scores.short??'—')+' · Unidad: '+(p.scores.long??'—')+'</p><div id="exam"></div></div></div>';
- const demoContainer = $('#course-demo');
- import('/course-demo.js').then(({mountCourseDemo}) => mountCourseDemo(demoContainer, id)).catch(() => {
-   if (demoContainer.isConnected) demoContainer.textContent = 'No pudimos cargar el ejemplo visual. Puedes continuar con la guía y la práctica.';
- });
+function scoreText(score) {
+  return typeof score === 'number' ? score.toLocaleString('es-CO',{maximumFractionDigits:2}) + '/100' : 'Pendiente';
 }
-function reportHTML(r){return '<div class="feedback"><h3>'+r.score+'/100 · '+(r.score>=80?'Meta alcanzada':'Sigue practicando')+'</h3>'+(r.mode?'<span class="pill">'+(r.mode==='ai'?'Explicación con IA':'Corrección automática por reglas')+'</span>':'')+r.details.map(d=>'<p class="'+(d.ok?'good':'bad')+'">'+(d.ok?'✓ ':'↳ ')+esc(d.cell||d.question)+': '+esc(d.message)+'</p>').join('')+(r.tutor?'<p>'+esc(r.tutor)+'</p>':'')+(r.note?'<p class="muted">'+esc(r.note)+'</p>':'')+'</div>';}
-const activityName = {practice:'Práctica', short:'Examen corto', long:'Evaluación de unidad'};
+
+function renderParts(module, scores) {
+  return module.parts.map((part,index) =>
+    '<details class="card lesson-part"' + (index === 0 ? ' open' : '') + '><summary><strong>Parte ' +
+    (index + 1) + ' · ' + esc(part.title) + '</strong><span class="pill" data-score-kind="' + part.kind + '">' +
+    scoreText(scores[part.kind]) + '</span></summary><p>' + esc(part.lesson) + '</p>' +
+    '<div class="lesson-example"><strong>Prueba este ejemplo</strong><p>' + esc(part.example) + '</p></div>' +
+    '<button type="button" data-exam="' + part.kind + '">Examen de la parte · 3 preguntas</button>' +
+    '<div data-quiz="' + part.kind + '"></div></details>'
+  ).join('');
+}
+
+function officialExamples(module) {
+  return '<section class="card"><h2>Ejemplos oficiales</h2><ul class="official-links">' + module.examples.map(example =>
+    '<li><a href="' + esc(example.url) + '" target="_blank" rel="noopener noreferrer">' +
+    esc(example.platform) + ' · ' + esc(example.title) + ' ↗</a></li>').join('') + '</ul></section>';
+}
+
+function lesson(id) {
+  current=modules.find(module => module.id===id);
+  view('lesson');
+  const m=current;
+  const scores=progress[id-1].scores;
+  const final=m.id===8;
+  const examTitle=final?'Examen final acumulativo':'Evaluación de unidad';
+  const toolGuide=user.tool==='excel'
+    ? 'Descarga la plantilla, ábrela en Excel Online y guarda una copia XLSX después de recalcular.'
+    : 'Importa la plantilla en Google Sheets. Al terminar, usa Archivo → Descargar → Microsoft Excel (.xlsx).';
+
+  $('#lesson').innerHTML='<button id="back">← '+(ownerAccess?'Revisar el curso':'Mi curso')+'</button>' +
+    '<div class="lesson-body">'+(ownerAccess?'<p class="pill">Modo de revisión · Resultado de prueba</p>':'') +
+    '<p class="eyebrow">MÓDULO '+m.id+' · '+esc(m.level)+'</p><h1>'+esc(m.title)+'</h1><p>'+esc(m.goal)+'</p>' +
+    '<span class="pill">'+(user.tool==='excel'?'Ruta Excel Online':'Ruta Google Sheets')+'</span>' +
+    '<p class="muted">Lee las tres partes, reproduce el ejemplo y entrega la práctica antes de cerrar el módulo.</p>' +
+    renderParts(m,scores)+'<details class="card"><summary>Repaso y referencias rápidas</summary>'+m.guide.map(text=>'<p>'+esc(text)+'</p>').join('')+'</details>'+officialExamples(m) +
+    '<section class="card course-demo" id="course-demo" aria-label="Ejemplo visual"><p>Cargando ejemplo visual…</p></section>' +
+    '<section class="card"><h2>Manos a la hoja</h2><p>'+esc(m.task)+'</p>'+platformGuide(m)+'<p>'+esc(toolGuide)+'</p>' +
+    '<button type="button" class="primary" data-template="'+m.id+'">↓ Descargar plantilla</button>' +
+    '<p id="template-status" class="muted" role="status"></p><form id="practice">' +
+    '<label>Entrega tu práctica · XLSX, máximo 2 MB<input type="file" name="file" accept=".xlsx" required></label>' +
+    '<button class="primary">Revisar mi práctica</button></form>' +
+    '<p class="muted">'+esc(m.reviewNote || 'Revisamos los resultados guardados. Los gráficos y el formato requieren revisión adicional.')+'</p>' +
+    '<div id="practice-report"></div></section>' +
+    '<section class="card"><h2>'+examTitle+'</h2><p>'+m.unitQuestionCount+' preguntas. '+(final
+      ? 'Cubre los ocho módulos. Entrega el proyecto primero. Se requiere 80 en el examen y en el proyecto.'
+      : 'Aplica lo aprendido en situaciones de la unidad.')+'</p>' +
+    '<p class="muted">Práctica: 30 % · Promedio de las tres partes: 20 % · '+examTitle+': 50 %.</p>' +
+    '<dl class="lesson-scores"><div><dt>Práctica</dt><dd data-score-kind="practice">'+scoreText(scores.practice)+'</dd></div>' +
+    '<div><dt>Nota de partes</dt><dd data-score-kind="short">'+scoreText(scores.short)+'</dd></div>' +
+    '<div><dt>'+examTitle+'</dt><dd data-score-kind="long">'+scoreText(scores.long)+'</dd></div></dl>' +
+    '<button type="button" class="primary" data-exam="long">Iniciar '+examTitle.toLowerCase()+'</button>' +
+    '<div data-quiz="long"></div></section></div>';
+
+  const demoContainer=$('#course-demo');
+  import('/course-demo.js').then(({mountCourseDemo}) => mountCourseDemo(demoContainer,id)).catch(() => {
+    if(demoContainer.isConnected)demoContainer.textContent='No pudimos cargar el ejemplo visual. Puedes continuar con la guía y la práctica.';
+  });
+}
+
+async function refreshLessonScores(moduleId) {
+  await refresh();
+  if (current?.id !== moduleId || $('#lesson').hidden) return;
+  const scores = progress[moduleId-1].scores;
+  $('#lesson').querySelectorAll('[data-score-kind]').forEach(node => {
+    node.textContent=scoreText(scores[node.dataset.scoreKind]);
+  });
+}
+
+async function openQuiz(button) {
+  const moduleId=current.id;
+  const kind=button.dataset.exam;
+  const target=$('[data-quiz="'+kind+'"]');
+  button.disabled=true;
+  try {
+    const data=await api('/modules/'+moduleId+'/exam',{method:'POST',body:JSON.stringify({kind})});
+    if(!target?.isConnected)return;
+    target.innerHTML='<form class="quiz-form" data-id="'+data.id+'" data-module-id="'+moduleId+'" data-count="'+data.questions.length+'">' +
+      data.questions.map((q,i)=>'<fieldset><legend>'+ (i+1) +'. '+esc(q.question)+'</legend>' +
+        q.options.map((option,j)=>'<label><input type="radio" name="q'+i+'" value="'+j+'" required>'+esc(option)+'</label>').join('')+
+      '</fieldset>').join('')+'<button class="primary">Entregar respuestas</button></form>';
+    target.querySelector('input')?.focus();
+  } catch(err) { error(err); } finally { button.disabled=false; }
+}
+function reportHTML(r){return '<div class="feedback"><h3>'+r.score+'/100 · '+(r.score>=80?'Meta alcanzada':'Sigue practicando')+'</h3>'+(r.mode?'<span class="pill">'+(r.mode==='ai'?'Explicación con IA':'Corrección automática por reglas')+'</span>':'')+r.details.map(d=>'<p class="'+(d.ok?'good':'bad')+'">'+(d.ok?'✓ ':'↳ ')+esc(d.cell||d.question)+': '+esc(d.message)+(d.correctAnswer&&!d.ok?' Respuesta correcta: '+esc(d.correctAnswer):'')+'</p>').join('')+(r.tutor?'<p>'+esc(r.tutor)+'</p>':'')+(typeof r.examScore==='number'?'<p>Examen: '+scoreText(r.examScore)+' · Proyecto: '+scoreText(r.projectScore)+'</p>':'')+(r.note?'<p class="muted">'+esc(r.note)+'</p>':'')+'</div>';}
+const activityNames = {practice:'Práctica',short:'Examen corto',long:'Evaluación de unidad',
+  'part:1':'Examen de parte 1','part:2':'Examen de parte 2','part:3':'Examen de parte 3'};
+const activityName = (kind,moduleId) => kind==='long'&&moduleId===8 ? 'Examen final acumulativo' : activityNames[kind];
 const dateText = value => value ? new Date(value).toLocaleString('es-CO', {timeZone:'America/Bogota'}) : '—';
 const moduleTitle = id => modules.find(module => module.id === id)?.title ?? 'Módulo ' + id;
 
@@ -111,7 +191,7 @@ async function showStudent(id, before = '', append = false) {
     }
     $('#owner-attempts').insertAdjacentHTML('beforeend', attempts.map(attempt =>
       '<details class="card owner-attempt"><summary>' + esc(moduleTitle(attempt.module)) + ' · ' +
-      esc(activityName[attempt.kind]) + ' · ' + attempt.score + '/100 <span class="muted">' +
+      esc(activityName(attempt.kind,attempt.module)) + ' · ' + attempt.score + '/100 <span class="muted">' +
       esc(dateText(attempt.created_at)) + '</span></summary>' + reportHTML(attempt.feedback) + '</details>'
     ).join('') || (append ? '' : '<p>Todavía no hay entregas.</p>'));
     $('#owner-attempt-next').innerHTML = next ? '<button data-attempt-student="' + id +
@@ -196,8 +276,8 @@ document.addEventListener('click',async e=>{
  if(b.id==='back'||b.id==='nav-course'||b.id==='review-course'){if(user)await dashboard();else view('auth');}
  if(b.id==='toggle-auth'){register=!register;$('#registration').hidden=!register;$('#auth-form [name=name]').required=register;$('#auth-form .primary').textContent=register?'Crear cuenta':'Ingresar';b.textContent=register?'Ya tengo cuenta':'Soy nuevo · crear cuenta';}
  if(b.id==='logout'){try{await api('/logout',{method:'POST'});location.reload();}catch(e){error(e);}}
- if(b.id==='nav-history'){if(!user)return view('auth');try{const rows=await api('/history');view('history');$('#history').innerHTML=(ownerAccess?'<h1>Resultados de tus pruebas</h1>':'<h1>Tu progreso, intento a intento.</h1>')+(rows.length?rows.map(r=>'<article class="card"><span class="pill">Módulo '+r.module+' · '+esc({practice:'Práctica',short:'Examen corto',long:'Evaluación de unidad'}[r.kind])+'</span><p class="muted">'+esc(new Date(r.created_at).toLocaleString('es-CO'))+'</p>'+reportHTML(r.feedback)+'</article>').join(''):'<p>Tus resultados aparecerán después de entregar tu primera actividad.</p>');}catch(e){error(e);}}
- if(b.dataset.exam){b.disabled=true;try{const data=await api('/modules/'+current.id+'/exam',{method:'POST',body:JSON.stringify({kind:b.dataset.exam})});$('#exam').innerHTML='<form id="exam-form" data-id="'+data.id+'">'+data.questions.map((q,i)=>'<fieldset><legend>'+esc(q.question)+'</legend>'+q.options.map((o,j)=>'<label><input type="radio" name="q'+i+'" value="'+j+'" required>'+esc(o)+'</label>').join('')+'</fieldset>').join('')+'<button class="primary">Entregar respuestas</button></form>';$('#exam-form').dataset.count=data.questions.length;}catch(e){error(e);}finally{b.disabled=false;}}
+ if(b.id==='nav-history'){if(!user)return view('auth');try{const rows=await api('/history');view('history');$('#history').innerHTML=(ownerAccess?'<h1>Resultados de tus pruebas</h1>':'<h1>Tu progreso, intento a intento.</h1>')+(rows.length?rows.map(r=>'<article class="card"><span class="pill">Módulo '+r.module+' · '+esc(activityName(r.kind,r.module))+'</span><p class="muted">'+esc(new Date(r.created_at).toLocaleString('es-CO'))+'</p>'+reportHTML(r.feedback)+'</article>').join(''):'<p>Tus resultados aparecerán después de entregar tu primera actividad.</p>');}catch(e){error(e);}}
+ if(b.dataset.exam)await openQuiz(b);
 });
 function showAccountSuccess(message) {
   $('#notice').className='good';
@@ -224,8 +304,22 @@ document.addEventListener('submit',async e=>{
  }
  if(form.id==='owner-search')await showStudents(new FormData(form).get('query'));
  if(form.id==='auth-form'){const body=Object.fromEntries(new FormData(form));await api('/auth/'+(register?'register':'login'),{method:'POST',body:JSON.stringify(body)});await dashboard();}
- if(form.id==='practice'){const r=await api('/modules/'+current.id+'/practice',{method:'POST',body:new FormData(form)});$('#practice-report').innerHTML=reportHTML(r);await refresh();}
- if(form.id==='exam-form'){const data=new FormData(form);const answers=Array.from({length:Number(form.dataset.count)},(_,i)=>Number(data.get('q'+i)));const r=await api('/modules/'+current.id+'/exam/submit',{method:'POST',body:JSON.stringify({id:form.dataset.id,answers})});$('#exam').innerHTML=reportHTML(r);await refresh();}
+ if(form.id==='practice'){
+   const moduleId=current.id;
+   const target=$('#practice-report');
+   const result=await api('/modules/'+moduleId+'/practice',{method:'POST',body:new FormData(form)});
+   if(target.isConnected)target.innerHTML=reportHTML(result);
+   await refreshLessonScores(moduleId);
+ }
+ if(form.classList.contains('quiz-form')){
+   const data=new FormData(form);
+   const target=form.parentElement;
+   const moduleId=Number(form.dataset.moduleId);
+   const answers=Array.from({length:Number(form.dataset.count)},(_,i)=>Number(data.get('q'+i)));
+   const result=await api('/modules/'+moduleId+'/exam/submit',{method:'POST',body:JSON.stringify({id:form.dataset.id,answers})});
+   if(form.isConnected)target.innerHTML=reportHTML(result);
+   await refreshLessonScores(moduleId);
+ }
  }catch(e){error(e);}finally{btn.disabled=false;}
 });
 (async()=>{try{await refresh();await dashboard();}catch(e){view('auth');}})();

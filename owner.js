@@ -2,16 +2,20 @@ import {createHash, timingSafeEqual} from 'node:crypto';
 import {rateLimit} from 'express-rate-limit';
 import ExcelJS from 'exceljs';
 import {modules} from './course.js';
-import {moduleGrade} from './grading.js';
+import {includePartAverage, moduleGrade} from './grading.js';
+import {partKinds} from './lessons.js';
 import {hashPassword, loginEmail, validPassword} from './accounts.js';
 
 const pageSize = 40;
-const activityNames = {practice: 'Práctica', short: 'Examen corto', long: 'Evaluación de unidad'};
+const activityNames = {practice:'Práctica',short:'Examen corto',long:'Evaluación de unidad',
+  'part:1':'Examen de parte 1','part:2':'Examen de parte 2','part:3':'Examen de parte 3'};
+const activityName = (kind,id) => kind === 'long' && id === 8 ? 'Examen final acumulativo' : activityNames[kind];
 const moduleName = id => modules[id - 1]?.title ?? String(id);
 
 export function progressFromScores(rows) {
   return modules.map(({id}) => {
-    const scores = Object.fromEntries(rows.filter(row => row.module === id).map(row => [row.kind, row.score]));
+    const attempts = Object.fromEntries(rows.filter(row => row.module === id).map(row => [row.kind, row.score]));
+    const scores = includePartAverage(attempts, partKinds);
     return {id, scores, ...moduleGrade(scores, id)};
   });
 }
@@ -189,10 +193,10 @@ export function mountOwner(app, db) {
     addSummary(summary, student);
     summary.commit();
     const progress = reportSheet(workbook, 'Avance por módulo', [
-      ['Módulo', 35], ['Práctica', 15], ['Examen corto', 17], ['Evaluación de unidad', 24], ['Nota final', 15], ['Estado', 20]
+      ['Módulo', 35], ['Práctica', 15], ['Parte 1', 12], ['Parte 2', 12], ['Parte 3', 12], ['Nota de partes', 18], ['Evaluación de unidad', 24], ['Nota final', 15], ['Estado', 20]
     ]);
     for (const module of student.progress) {
-      progress.addRow([moduleName(module.id), module.scores.practice, module.scores.short, module.scores.long,
+      progress.addRow([moduleName(module.id), module.scores.practice, ...partKinds.map(kind => module.scores[kind]), module.scores.short, module.scores.long,
         module.score, module.passed ? 'Aprobado' : module.score === null ? 'Pendiente' : 'Por mejorar']).commit();
     }
     progress.commit();
@@ -205,7 +209,7 @@ export function mountOwner(app, db) {
       for (const row of rows) {
         const corrections = (row.feedback?.details ?? []).filter(detail => !detail.ok)
           .map(detail => (detail.cell || detail.question) + ': ' + detail.message).join('\n');
-        attempts.addRow([iso(row.created_at), moduleName(row.module), activityNames[row.kind],
+        attempts.addRow([iso(row.created_at), moduleName(row.module), activityName(row.kind,row.module),
           row.score, corrections, row.feedback?.tutor ?? '']).commit();
       }
       if (rows.length < pageSize) break;

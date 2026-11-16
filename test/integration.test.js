@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import ExcelJS from 'exceljs';
 import {modules} from '../course.js';
+import {examQuestions, partKinds} from '../lessons.js';
 test('sessions, isolation, workbook review and module unlocking',{skip:!process.env.DATABASE_URL,timeout:30000},async()=>{
  const origin='http://127.0.0.1:3101';
  const child=spawn(process.execPath,['server.js'],{env:{...process.env,APP_ORIGIN:origin,PORT:'3101',NODE_ENV:'test',OPENAI_API_KEY:'',OWNER_SETUP_TOKEN:'test-only-owner-code'},stdio:'inherit'});
@@ -21,14 +22,30 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('Entrega');sheet.getCell('A1').value='Concepto';sheet.getCell('B1').value='Valor';sheet.getCell('B2').value=800000;
  const form=new FormData();form.append('file',new Blob([await workbook.xlsx.writeBuffer()]),'practice.xlsx');
  const uploaded=await request('/modules/1/practice',{cookie,method:'POST',body:form,raw:true});assert.equal(uploaded.status,200);assert.equal((await uploaded.json()).score,100);
- for(const kind of ['short','long']){
+ const outline=await (await request('/modules',{cookie})).json();
+ assert.equal(outline.length,8);
+ assert.equal(outline[0].parts.length,3);
+ assert.equal(outline[0].parts[0].questions,undefined);
+ assert.equal(outline[0].examples.length,2);
+ assert.equal(outline[7].unitQuestionCount,16);
+ assert.equal((await request('/modules/1/exam',{cookie,method:'POST',body:{kind:'short'}})).status,400);
+ const answerFor = (module,kind,questions) => {
+   const bank = examQuestions(module,kind);
+   return questions.map(({question,options}) => {
+     const item = bank.find(entry=>entry.question===question);
+     return options.indexOf(item.options[item.correct]);
+   });
+ };
+ for(const kind of [...partKinds,'long']){
  const exam=await(await request('/modules/1/exam',{cookie,method:'POST',body:{kind}})).json();
- const correct=['Columna B, fila 3','La presentación','Un rango','Un concepto por fila'];
- const answers=exam.questions.map((q,i)=>q.options.indexOf(correct[i]));
+ assert.equal(exam.questions.length,kind==='long'?6:3);
+ const answers=answerFor(1,kind,exam.questions);
  const submit=await request('/modules/1/exam/submit',{cookie,method:'POST',body:{id:exam.id,answers}});
  assert.equal((await submit.json()).score,100);
  assert.equal((await request('/modules/1/exam/submit',{cookie,method:'POST',body:{id:exam.id,answers}})).status,400);
  }
+ const firstProgress=await (await request('/me',{cookie})).json();
+ assert.equal(firstProgress.progress[0].scores.short,100);
  const template = await request('/modules/2/template',{cookie});
  assert.equal(template.status,200);
  assert.match(template.headers.get('content-type'),/^application\/vnd\.openxmlformats/);
@@ -50,6 +67,7 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
    assert.equal((await request('/modules/'+id+'/template',{cookie:cookieB})).status,200);
  }
  assert.equal((await request('/modules/8/template',{cookie})).status,403);
+ assert.equal((await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind:'long'}})).status,400);
  const practiceBook = new ExcelJS.Workbook();
  const practiceSheet = practiceBook.addWorksheet('Entrega');
  for (const {cell,expected} of modules[7].checks) practiceSheet.getCell(cell).value = expected;
@@ -58,9 +76,10 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const preview = await request('/modules/8/practice',{cookie:cookieB,method:'POST',body:ownerPractice,raw:true});
  assert.equal(preview.status,200);
  assert.equal((await preview.json()).score,100);
- for (const kind of ['short','long']) {
+ for (const kind of [...partKinds,'long']) {
    const exam = await (await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind}})).json();
-   const answers = exam.questions.map((q,i) => q.options.indexOf(modules[7].questions[i].options[modules[7].questions[i].correct]));
+   assert.equal(exam.questions.length,kind==='long'?16:3);
+   const answers = answerFor(8,kind,exam.questions);
    const result = await request('/modules/8/exam/submit',{cookie:cookieB,method:'POST',body:{id:exam.id,answers}});
    assert.equal(result.status,200);
    assert.equal((await result.json()).score,100);
@@ -69,7 +88,7 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal(previewProfile.progress[7].passed,true);
  assert.equal(previewProfile.progress[0].passed,false);
  const previewHistory = await (await request('/history',{cookie:cookieB})).json();
- assert.equal(previewHistory.length,3);
+ assert.equal(previewHistory.length,5);
  const ownerReportDetail = await (await request('/owner/students/'+previewProfile.user.id,{cookie:cookieB})).json();
  assert.equal(ownerReportDetail.attempts.length,0);
  assert.equal(ownerReportDetail.student.progress[7].score,null);
@@ -105,7 +124,7 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal(student.approved,1);
  assert.equal((await request('/owner/students/'+student.id,{cookie})).status,403);
  const detail = await (await request('/owner/students/'+student.id,{cookie:cookieB})).json();
- assert.equal(detail.attempts.length,3);
+ assert.equal(detail.attempts.length,5);
  for(const path of ['/owner/report.xlsx','/owner/students/'+student.id+'/report.xlsx']){
  const response = await request(path,{cookie:cookieB});
  assert.equal(response.status,200);
@@ -113,7 +132,7 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const report = new ExcelJS.Workbook();
  await report.xlsx.load(Buffer.from(await response.arrayBuffer()));
  assert.equal(report.worksheets[0].getCell('B2').value,email);
- if(path.includes('/students/'))assert.equal(report.getWorksheet('Intentos y correcciones').rowCount,4);
+ if(path.includes('/students/'))assert.equal(report.getWorksheet('Intentos y correcciones').rowCount,6);
  }
  const patchStudent = (id, changes, cookie = cookieB) =>
    request('/owner/students/'+id,{cookie,method:'PATCH',body:changes});
