@@ -2,10 +2,12 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import ExcelJS from 'exceljs';
+import pg from 'pg';
 import {modules} from '../course.js';
 import {examQuestions, partKinds} from '../lessons.js';
 test('sessions, isolation, workbook review and module unlocking',{skip:!process.env.DATABASE_URL,timeout:30000},async()=>{
  const origin='http://127.0.0.1:3101';
+ const clockTestDb=new pg.Pool({connectionString:process.env.DATABASE_URL});
  const child=spawn(process.execPath,['server.js'],{env:{...process.env,APP_ORIGIN:origin,PORT:'3101',NODE_ENV:'test',OPENAI_API_KEY:'',OWNER_SETUP_TOKEN:'test-only-owner-code'},stdio:'inherit'});
  try{
  let ready=false;for(let i=0;i<60;i++){try{ready=(await fetch(origin+'/health')).ok;}catch{}if(ready)break;await new Promise(r=>setTimeout(r,150));}assert.equal(ready,true);
@@ -79,6 +81,10 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  for (const kind of [...partKinds,'long']) {
    const exam = await (await request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind}})).json();
    assert.equal(exam.questions.length,kind==='long'?16:3);
+   if (kind==='long') {
+     assert.equal(exam.final.attempt,1);
+     assert.equal(Date.parse(exam.final.expiresAt)-Date.parse(exam.final.serverNow),60*60*1000);
+   }
    const answers = answerFor(8,kind,exam.questions);
    const result = await request('/modules/8/exam/submit',{cookie:cookieB,method:'POST',body:{id:exam.id,answers}});
    assert.equal(result.status,200);
@@ -92,6 +98,31 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const ownerReportDetail = await (await request('/owner/students/'+previewProfile.user.id,{cookie:cookieB})).json();
  assert.equal(ownerReportDetail.attempts.length,0);
  assert.equal(ownerReportDetail.student.progress[7].score,null);
+ const startFinal = () => request('/modules/8/exam',{cookie:cookieB,method:'POST',body:{kind:'long'}});
+ const submitFinal = (exam,answers=answerFor(8,'long',exam.questions)) =>
+   request('/modules/8/exam/submit',{cookie:cookieB,method:'POST',body:{id:exam.id,answers}});
+ const [second,resumed] = await Promise.all([startFinal(),startFinal()]).then(responses=>Promise.all(responses.map(r=>r.json())));
+ assert.equal(second.final.attempt,2);
+ assert.equal(second.id,resumed.id);
+ assert.equal(second.final.expiresAt,resumed.final.expiresAt);
+ assert.deepEqual(second.questions,resumed.questions);
+ assert.equal((await submitFinal(second,[])).status,400);
+ assert.equal((await (await startFinal()).json()).id,second.id);
+ await clockTestDb.query("UPDATE final_exam_sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1",[second.id]);
+ assert.equal((await submitFinal(second)).status,400);
+ const third = await (await startFinal()).json();
+ assert.equal(third.final.attempt,3);
+ const thirdResponse = await submitFinal(third);
+ assert.equal(thirdResponse.status,200);
+ const thirdReport = await thirdResponse.json();
+ const locked = await startFinal();
+ assert.equal(locked.status,429);
+ assert.equal((await locked.json()).availableAt,thirdReport.final.availableAt);
+ assert.equal((await submitFinal(third)).status,400);
+ await clockTestDb.query("UPDATE final_exam_sessions SET finished_at=clock_timestamp()-interval '25 hours' WHERE id=$1",[third.id]);
+ const renewed = await (await startFinal()).json();
+ assert.equal(renewed.final.attempt,1);
+ assert.notEqual(renewed.id,third.id);
  const pivotTemplate = await request('/modules/7/template',{cookie:cookieB});
  assert.equal(pivotTemplate.status,200);
  const pivotBook = new ExcelJS.Workbook();
@@ -168,5 +199,5 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  assert.equal((await (await request('/me',{cookie:newCookie})).json()).progress[0].passed,true);
  await request('/logout',{cookie,method:'POST'});
  assert.equal((await request('/me',{cookie})).status,401);
- }finally{child.kill('SIGTERM');}
+ }finally{child.kill('SIGTERM');await clockTestDb.end();}
 });

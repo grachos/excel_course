@@ -4,7 +4,16 @@ let user,progress=[],modules=[],current,register=false;
 let ownerAccess = false;
 let ownerSetup = false;
 let activationRequested = new URLSearchParams(location.search).get('activar') === 'dueno';
-async function api(path,options={}){const r=await fetch('/api'+path,{...options,headers:options.body instanceof FormData?{}:{'Content-Type':'application/json'}});const data=await r.json();if(!r.ok)throw Error(data.error||'No se pudo completar la solicitud.');return data;}
+async function api(path, options={}) {
+  const response=await fetch('/api'+path,{...options,headers:options.body instanceof FormData?{}:{'Content-Type':'application/json'}});
+  const data=await response.json();
+  if (!response.ok) {
+    const failure=new Error(data.error || 'No se pudo completar la solicitud.');
+    failure.availableAt=data.availableAt;
+    throw failure;
+  }
+  return data;
+}
 function error(e){$('#notice').className='error';$('#notice').textContent=e.message;}
 function view(id){for(const s of ['auth','dashboard','lesson','history','owner'])$('#'+s).hidden=s!==id;$('#notice').textContent='';window.scrollTo(0,0);}
 async function refresh(){const r=await api('/me');user=r.user;progress=r.progress;ownerAccess=r.isOwner;ownerSetup=r.ownerSetupAvailable;$('#nav-owner').hidden=!ownerAccess;$('#identity').textContent=user.name+' · '+(user.tool==='excel'?'Excel Online':'Google Sheets');$('#logout').hidden=false;return r;}
@@ -73,7 +82,7 @@ function lesson(id) {
     '<p class="muted">'+esc(m.reviewNote || 'Revisamos los resultados guardados. Los gráficos y el formato requieren revisión adicional.')+'</p>' +
     '<div id="practice-report"></div></section>' +
     '<section class="card"><h2>'+examTitle+'</h2><p>'+m.unitQuestionCount+' preguntas. '+(final
-      ? 'Cubre los ocho módulos. Entrega el proyecto primero. Se requiere 80 en el examen y en el proyecto.'
+      ? 'Cubre los ocho módulos. Entrega el proyecto primero y alcanza 80 en ambas actividades. Tienes 60 minutos por intento y hasta tres intentos. Después del tercero, espera 24 horas para volver a presentarlo.'
       : 'Aplica lo aprendido en situaciones de la unidad.')+'</p>' +
     '<p class="muted">Práctica: 30 % · Promedio de las tres partes: 20 % · '+examTitle+': 50 %.</p>' +
     '<dl class="lesson-scores"><div><dt>Práctica</dt><dd data-score-kind="practice">'+scoreText(scores.practice)+'</dd></div>' +
@@ -101,6 +110,45 @@ async function refreshLessonScores(moduleId) {
   });
 }
 
+function finalAvailableText(value) {
+  const date = new Intl.DateTimeFormat('es-CO', {
+    dateStyle:'medium',timeStyle:'short',timeZone:'America/Bogota'
+  }).format(new Date(value));
+  return 'Podrás volver a presentarlo el '+date+' (hora de Colombia).';
+}
+
+function enableFinalTimer(form, final) {
+  const deadline = performance.now() + (Date.parse(final.expiresAt) - Date.parse(final.serverNow));
+  const display = form.querySelector('[data-final-timer]');
+  const draftKey = 'celda-final-' + form.dataset.id;
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(draftKey) || '{}');
+    form.querySelectorAll('input[type=radio]').forEach(input => {
+      if (draft[input.name] === input.value) input.checked=true;
+    });
+  } catch {}
+  form.addEventListener('change', () => {
+    try { sessionStorage.setItem(draftKey,JSON.stringify(Object.fromEntries(new FormData(form)))); } catch {}
+  });
+  function draw() {
+    if (!form.isConnected) return false;
+    const remaining = Math.max(0,Math.ceil((deadline-performance.now())/1000));
+    const minutes = String(Math.floor(remaining/60)).padStart(2,'0');
+    const seconds = String(remaining%60).padStart(2,'0');
+    display.textContent = remaining ? 'Tiempo restante: '+minutes+':'+seconds
+      : 'Se agotó el tiempo de este intento. Usa el botón del examen para consultar tu siguiente intento.';
+    if (!remaining) {
+      form.dataset.expired='true';
+      form.querySelectorAll('input, button').forEach(control => {control.disabled=true;});
+      try { sessionStorage.removeItem(draftKey); } catch {}
+    }
+    return remaining > 0;
+  }
+  if (draw()) {
+    const timer = setInterval(() => {if (!draw()) clearInterval(timer);},500);
+  }
+}
+
 async function openQuiz(button) {
   const moduleId=current.id;
   const kind=button.dataset.exam;
@@ -109,14 +157,26 @@ async function openQuiz(button) {
   try {
     const data=await api('/modules/'+moduleId+'/exam',{method:'POST',body:JSON.stringify({kind})});
     if(!target?.isConnected)return;
-    target.innerHTML='<form class="quiz-form" data-id="'+data.id+'" data-module-id="'+moduleId+'" data-count="'+data.questions.length+'">' +
+    const header = data.final ? '<div class="final-timing"><strong>Intento '+data.final.attempt+' de '+data.final.maxAttempts+
+      '</strong><p data-final-timer role="timer">Tiempo restante</p></div>' : '';
+    target.innerHTML='<form class="quiz-form" data-id="'+data.id+'" data-module-id="'+moduleId+'" data-count="'+data.questions.length+'">' + header +
       data.questions.map((q,i)=>'<fieldset><legend>'+ (i+1) +'. '+esc(q.question)+'</legend>' +
         q.options.map((option,j)=>'<label><input type="radio" name="q'+i+'" value="'+j+'" required>'+esc(option)+'</label>').join('')+
       '</fieldset>').join('')+'<button class="primary">Entregar respuestas</button></form>';
+    if (data.final) {
+      button.textContent = 'Continuar examen final';
+      enableFinalTimer(target.querySelector('form'),data.final);
+    }
     target.querySelector('input')?.focus();
-  } catch(err) { error(err); } finally { button.disabled=false; }
+  } catch(err) {
+    if (err.availableAt && target?.isConnected) {
+      target.textContent = err.message+' '+finalAvailableText(err.availableAt);
+    } else {
+      error(err);
+    }
+  } finally { button.disabled=false; }
 }
-function reportHTML(r){return '<div class="feedback"><h3>'+r.score+'/100 · '+(r.score>=80?'Meta alcanzada':'Sigue practicando')+'</h3>'+(r.mode?'<span class="pill">'+(r.mode==='ai'?'Explicación con IA':'Corrección automática por reglas')+'</span>':'')+r.details.map(d=>'<p class="'+(d.ok?'good':'bad')+'">'+(d.ok?'✓ ':'↳ ')+esc(d.cell||d.question)+': '+esc(d.message)+(d.correctAnswer&&!d.ok?' Respuesta correcta: '+esc(d.correctAnswer):'')+'</p>').join('')+(r.tutor?'<p>'+esc(r.tutor)+'</p>':'')+(typeof r.examScore==='number'?'<p>Examen: '+scoreText(r.examScore)+' · Proyecto: '+scoreText(r.projectScore)+'</p>':'')+(r.note?'<p class="muted">'+esc(r.note)+'</p>':'')+'</div>';}
+function reportHTML(r){return '<div class="feedback"><h3>'+scoreText(r.score)+' · '+(r.score>=80?'Meta alcanzada':'Sigue practicando')+'</h3>'+(r.mode?'<span class="pill">'+(r.mode==='ai'?'Explicación con IA':'Corrección automática por reglas')+'</span>':'')+r.details.map(d=>'<p class="'+(d.ok?'good':'bad')+'">'+(d.ok?'✓ ':'↳ ')+esc(d.cell||d.question)+': '+esc(d.message)+(d.correctAnswer&&!d.ok?' Respuesta correcta: '+esc(d.correctAnswer):'')+'</p>').join('')+(r.tutor?'<p>'+esc(r.tutor)+'</p>':'')+(typeof r.examScore==='number'?'<p>Examen: '+scoreText(r.examScore)+' · Proyecto: '+scoreText(r.projectScore)+'</p>':'')+(r.note?'<p class="muted">'+esc(r.note)+'</p>':'')+'</div>';}
 const activityNames = {practice:'Práctica',short:'Examen corto',long:'Evaluación de unidad',
   'part:1':'Examen de parte 1','part:2':'Examen de parte 2','part:3':'Examen de parte 3'};
 const activityName = (kind,moduleId) => kind==='long'&&moduleId===8 ? 'Examen final acumulativo' : activityNames[kind];
@@ -321,9 +381,17 @@ document.addEventListener('submit',async e=>{
    const moduleId=Number(form.dataset.moduleId);
    const answers=Array.from({length:Number(form.dataset.count)},(_,i)=>Number(data.get('q'+i)));
    const result=await api('/modules/'+moduleId+'/exam/submit',{method:'POST',body:JSON.stringify({id:form.dataset.id,answers})});
-   if(form.isConnected)target.innerHTML=reportHTML(result);
+   if(form.isConnected) {
+     target.innerHTML=reportHTML(result)+(result.final?.availableAt
+       ? '<p class="final-timing">'+esc(finalAvailableText(result.final.availableAt))+'</p>' : '');
+     if (result.final) {
+       const startButton=$('[data-exam="long"]');
+       if (startButton) startButton.textContent='Iniciar otro intento del examen final';
+       try { sessionStorage.removeItem('celda-final-'+form.dataset.id); } catch {}
+     }
+   }
    await refreshLessonScores(moduleId);
  }
- }catch(e){error(e);}finally{btn.disabled=false;}
+ }catch(e){error(e);}finally{btn.disabled=form.dataset.expired==='true';}
 });
 (async()=>{try{await refresh();await dashboard();}catch(e){view('auth');}})();

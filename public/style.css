@@ -20,3 +20,6 @@
 .part-demo .demo-board th,.part-demo .demo-board td{white-space:normal}
 .demo-trend{display:block;width:min(100%,400px);margin:10px 0 0}
 .demo-trend text{fill:#203b34;font-size:12px}
+
+.final-timing{background:#eef6ef;border:1px solid #d7e8dc;border-radius:8px;padding:10px 14px;margin:12px 0}
+.final-timing p{margin:5px 0 0}.final-timing [role=timer]{font-variant-numeric:tabular-nums}

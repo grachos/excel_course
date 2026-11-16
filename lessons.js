@@ -8,7 +8,7 @@ const partsByModule = [
       "example": "En A2 escribe Transporte y en B2 escribe 12500. Selecciona A1:B2 para incluir las dos columnas y el encabezado. Cambia el nombre de la hoja a Presupuesto.",
       "questions": [
         {
-          "question": "¿Qué rango abarca desde A2 hasta B5?",
+          "question": "En la hoja de gastos necesitas revisar conceptos e importes de cuatro viajes, desde A2 hasta B5. ¿Qué rango seleccionas?",
           "options": [
             "A2:B5",
             "A2,B5",
@@ -18,21 +18,21 @@ const partsByModule = [
           "explanation": "A2:B5 reúne dos columnas y cuatro filas."
         },
         {
-          "question": "¿Dónde está C4?",
+          "question": "Quieres corregir el importe de la fila 4 en la columna C. ¿Cómo ubicas la celda C4?",
           "options": [
             "Columna C, fila 4",
-            "Columna 4, fila C",
-            "Hoja C, fila 4"
+            "Columna D, fila 3",
+            "Columna C, fila 3"
           ],
           "correct": 0,
           "explanation": "La primera parte indica la columna."
         },
         {
-          "question": "¿Qué acción ayuda a reconocer la hoja al volver?",
+          "question": "Un compañero abrirá el archivo mañana para buscar el presupuesto. ¿Qué cambio en la pestaña le ayuda a encontrarlo?",
           "options": [
             "Ponerle un nombre descriptivo",
-            "Combinar todas sus celdas",
-            "Dejar el nombre inicial"
+            "Poner el nombre solo en A1",
+            "Dejar el nombre inicial y cambiar el color"
           ],
           "correct": 0,
           "explanation": "El nombre de la hoja explica su contenido."
@@ -45,7 +45,7 @@ const partsByModule = [
       "example": "Escribe 12500 y aplica formato de moneda. En otra celda escribe 0,15 y aplica porcentaje. Observa que puedes usar ambos valores en cálculos.",
       "questions": [
         {
-          "question": "¿Qué valor representa 15 %?",
+          "question": "El archivo de un comercio guarda el descuento como 15 %. Si quitas el formato de porcentaje, ¿qué valor numérico esperas ver?",
           "options": [
             "0,15",
             "15",
@@ -55,7 +55,7 @@ const partsByModule = [
           "explanation": "Porcentaje significa dividir entre cien."
         },
         {
-          "question": "¿Cómo conservas el cero inicial de un código 0012?",
+          "question": "El código 0012 identifica un producto. Al ingresarlo aparece 12. ¿Cómo conservas los dos ceros iniciales?",
           "options": [
             "Guárdalo como texto",
             "Aplica moneda",
@@ -65,7 +65,7 @@ const partsByModule = [
           "explanation": "El código identifica un registro y no se usa como cantidad."
         },
         {
-          "question": "¿Qué cambia al aplicar moneda a 12500?",
+          "question": "Registraste un gasto de 12500 y aplicas formato de moneda. ¿Qué cambia para quien lee la hoja?",
           "options": [
             "La presentación",
             "El importe original",
@@ -82,7 +82,7 @@ const partsByModule = [
       "example": "En vez de escribir «Taxi 12500» en una celda, usa Concepto y Valor. Registra cada viaje por separado y revisa que los montos se puedan sumar.",
       "questions": [
         {
-          "question": "¿Cómo registras tres viajes del mismo día?",
+          "question": "Pagaste tres viajes el mismo día y luego quieres filtrar por fecha y sumar por concepto. ¿Cómo registras los viajes?",
           "options": [
             "Tres filas, una por viaje",
             "Una celda con toda la información",
@@ -92,7 +92,7 @@ const partsByModule = [
           "explanation": "Cada registro necesita su propia fila."
         },
         {
-          "question": "¿Qué representa un importe vacío?",
+          "question": "En el presupuesto, una factura tiene la celda Importe vacía. ¿Cómo la interpretas hasta que alguien confirme el valor?",
           "options": [
             "Un valor sin registrar",
             "Un cero confirmado",
@@ -102,7 +102,7 @@ const partsByModule = [
           "explanation": "Un dato faltante requiere revisión."
         },
         {
-          "question": "¿Por qué separar concepto e importe?",
+          "question": "Tu equipo necesita filtrar los gastos por concepto y sumar los importes. ¿Qué ventaja tiene guardar cada dato en su propia columna?",
           "options": [
             "Para filtrar y sumar por separado",
             "Para reducir el tamaño del archivo",
@@ -121,7 +121,7 @@ const partsByModule = [
       "example": "Si B2 es 300 y C2 es 20, escribe =B2*(1-C2/100). El resultado 240 descuenta 20 % del precio.",
       "questions": [
         {
-          "question": "¿Qué vale =2+3*4?",
+          "question": "Un pedido suma 2 unidades de muestra y 3 cajas de 4 unidades. Escribes =2+3*4. ¿Cuántas unidades calcula la hoja?",
           "options": [
             "14",
             "20",
@@ -131,7 +131,7 @@ const partsByModule = [
           "explanation": "Primero se multiplica 3 por 4."
         },
         {
-          "question": "¿Cómo obligas a sumar primero?",
+          "question": "Una promoción arma 4 paquetes con 2 artículos de un tipo y 3 de otro en cada paquete. ¿Qué fórmula calcula el total?",
           "options": [
             "=(2+3)*4",
             "=2+3*4",
@@ -141,7 +141,7 @@ const partsByModule = [
           "explanation": "Los paréntesis agrupan la suma."
         },
         {
-          "question": "¿Qué ventaja tiene =B2*C2 frente a =3*2000?",
+          "question": "B2 contiene la cantidad de un pedido y C2 su precio unitario. Si alguien cambia la cantidad, ¿qué ventaja tiene usar =B2*C2?",
           "options": [
             "Se actualiza cuando cambian las celdas",
             "Siempre redondea",
@@ -158,7 +158,7 @@ const partsByModule = [
       "example": "Coloca una tasa de 0,19 en H1. Si D2 contiene el subtotal, escribe =D2*$H$1 y copia hacia abajo. La siguiente fila usa D3 y la misma tasa.",
       "questions": [
         {
-          "question": "Al copiar =D2*$H$1 hacia abajo, ¿qué queda?",
+          "question": "En D2 está el subtotal del primer pedido y la tasa general está en H1. Copias =D2*$H$1 una fila hacia abajo. ¿Qué fórmula queda?",
           "options": [
             "=D3*$H$1",
             "=D3*H2",
@@ -168,17 +168,17 @@ const partsByModule = [
           "explanation": "Solo se desplaza la referencia relativa."
         },
         {
-          "question": "¿Qué fija B$2?",
+          "question": "Una tabla compara meses y cada columna toma su mes de la fila 2. En B$2, ¿qué parte permanece fija al copiar?",
           "options": [
             "La fila 2",
             "La columna B",
-            "Toda la referencia"
+            "La columna B y la fila 2"
           ],
           "correct": 0,
           "explanation": "El signo $ actúa sobre la parte que le sigue."
         },
         {
-          "question": "¿Qué usarías para una tasa que todos comparten?",
+          "question": "Todos los pedidos usan la tasa que guardaste en H1. ¿Qué referencia evita que se mueva al copiar a la derecha o hacia abajo?",
           "options": [
             "$H$1",
             "H1",
@@ -195,7 +195,7 @@ const partsByModule = [
       "example": "Si el subtotal es 40000 y la tasa es 10 %, espera 4000. Si la segunda fila da cero, revisa si la fórmula se desplazó hasta una celda de tasa vacía.",
       "questions": [
         {
-          "question": "Si todas las filas menos la primera pierden la tasa, ¿qué revisas?",
+          "question": "La primera fila calcula bien el impuesto, pero al copiar aparecen ceros en las demás. ¿Qué revisarías primero?",
           "options": [
             "La referencia absoluta de la tasa",
             "El color de las celdas",
@@ -205,7 +205,7 @@ const partsByModule = [
           "explanation": "Una referencia relativa puede ir a una celda vacía."
         },
         {
-          "question": "¿Qué revisas ante un error de división?",
+          "question": "Calculas el precio por unidad y la hoja muestra un error de división. ¿Qué dato del cálculo compruebas antes de corregirlo?",
           "options": [
             "El denominador y su valor",
             "La fuente tipográfica",
@@ -215,7 +215,7 @@ const partsByModule = [
           "explanation": "Un denominador cero no permite calcular la división."
         },
         {
-          "question": "¿Qué prueba confirma el copiado?",
+          "question": "Copiaste la fórmula de un pedido a otras 20 filas. ¿Qué prueba rápida permite ver si las referencias se movieron como esperabas?",
           "options": [
             "Revisar la fórmula y el resultado de otra fila",
             "Revisar solo la primera fila",
@@ -234,7 +234,7 @@ const partsByModule = [
       "example": "Para 18, 22 y 30 en B2:B4, usa =SUMA(B2:B4) para obtener 70.",
       "questions": [
         {
-          "question": "¿Cuánto suma 18 + 22 + 30?",
+          "question": "Un almacén despachó 18, 22 y 30 unidades en tres turnos distintos. Si el rango solo contiene esos turnos, ¿qué total debe devolver SUMA?",
           "options": [
             "70",
             "52",
@@ -244,7 +244,7 @@ const partsByModule = [
           "explanation": "Se incluyen los tres valores."
         },
         {
-          "question": "¿Qué revisar si el total ignora una venta?",
+          "question": "SUMA arroja un total menor al del registro de caja. Encontraste una venta que parece quedar por fuera. ¿Qué revisas en la hoja?",
           "options": [
             "El rango y el tipo numérico de la venta",
             "El color del resultado",
@@ -254,7 +254,7 @@ const partsByModule = [
           "explanation": "Una fila fuera del rango o guardada como texto puede quedar excluida."
         },
         {
-          "question": "¿Qué pasa si sumas de nuevo un subtotal dentro del rango?",
+          "question": "Vas a sumar una columna con ventas individuales y al final ves un subtotal de esas mismas ventas. ¿Qué pasa si lo incluyes?",
           "options": [
             "Duplicas parte de los importes",
             "Corriges los datos faltantes",
@@ -271,7 +271,7 @@ const partsByModule = [
       "example": "Con 10, vacío y 20, la media es 15. Al registrar un cero real en la celda vacía, pasa a 10.",
       "questions": [
         {
-          "question": "¿Cuál es la media de 10, 0 y 20?",
+          "question": "Tres puntos de venta reportaron 10, 0 y 20 unidades. El segundo sí confirmó el cero. ¿Cuál es la media de los tres?",
           "options": [
             "10",
             "15",
@@ -281,7 +281,7 @@ const partsByModule = [
           "explanation": "Hay tres observaciones, incluido el cero."
         },
         {
-          "question": "¿Cuál es la media de 10, vacío y 20?",
+          "question": "Dos tiendas reportaron 10 y 20 unidades. La tercera todavía tiene la celda vacía. ¿Cuál es la media de las tiendas que ya reportaron?",
           "options": [
             "15",
             "10",
@@ -291,7 +291,7 @@ const partsByModule = [
           "explanation": "La celda vacía no agrega una observación."
         },
         {
-          "question": "¿Qué representa un punto de venta sin reporte?",
+          "question": "En el tablero mensual hay una tienda cuya celda está en blanco porque no envió el reporte. ¿Cómo interpretas ese espacio vacío?",
           "options": [
             "Un dato faltante que conviene confirmar",
             "Un cero automáticamente",
@@ -308,7 +308,7 @@ const partsByModule = [
       "example": "Con ventas 9, 12 y 44, MAX entrega 44 y MIN entrega 9. Si 44 parece atípico, revísalo en la fuente antes de presentar.",
       "questions": [
         {
-          "question": "¿Qué función ve la venta más baja?",
+          "question": "Debes identificar el menor valor registrado esta semana. ¿Qué función usas para revisar toda la columna sin ordenarla?",
           "options": [
             "MIN",
             "MAX",
@@ -318,7 +318,7 @@ const partsByModule = [
           "explanation": "MIN devuelve el valor mínimo."
         },
         {
-          "question": "¿Qué describe MAX(9,12,44)?",
+          "question": "Las ventas de tres turnos fueron 9, 12 y 44. ¿Qué información entrega MAX sobre esos turnos?",
           "options": [
             "La mayor observación: 44",
             "El total: 65",
@@ -328,7 +328,7 @@ const partsByModule = [
           "explanation": "MAX no suma ni cuenta."
         },
         {
-          "question": "Si aparece un máximo inesperado, ¿qué haces primero?",
+          "question": "El total de un local suele estar cerca de 20, pero MAX señala 440. ¿Qué haces antes de presentar esa cifra como un récord?",
           "options": [
             "Verificar el dato original",
             "Borrarlo de inmediato",
@@ -347,7 +347,7 @@ const partsByModule = [
       "example": "Selecciona el rango completo de pedidos y ordénalo por importe descendente. Comprueba que el número de pedido se movió junto a su importe.",
       "questions": [
         {
-          "question": "¿Qué se rompe al ordenar solo la columna Importe?",
+          "question": "Ordenaste solo los importes y ahora algunas cifras quedaron al lado de otro pedido. ¿Qué relación debes reconstruir?",
           "options": [
             "La relación con cada pedido",
             "La posibilidad de guardar",
@@ -357,7 +357,7 @@ const partsByModule = [
           "explanation": "Cada fila debe seguir describiendo el mismo pedido."
         },
         {
-          "question": "¿Qué orden muestra primero el valor mayor?",
+          "question": "Tu supervisora quiere ver primero los pedidos con mayor importe. ¿Qué orden seleccionas en la columna Importe?",
           "options": [
             "Descendente",
             "Ascendente",
@@ -367,7 +367,7 @@ const partsByModule = [
           "explanation": "El orden descendente va de mayor a menor."
         },
         {
-          "question": "¿Qué haces con la fila de encabezados?",
+          "question": "Vas a ordenar una tabla cuya primera fila dice Pedido, Cliente e Importe. ¿Cómo evitas que esa fila se mezcle con las ventas?",
           "options": [
             "Indicas que el rango tiene encabezado",
             "La ordenas como un pedido",
@@ -384,7 +384,7 @@ const partsByModule = [
       "example": "Filtra Estado = Pendiente y luego Región = Norte. Limpia Región para volver a ver todos los pendientes.",
       "questions": [
         {
-          "question": "¿Qué muestran los dos filtros del ejemplo?",
+          "question": "Para planificar entregas aplicas Estado = Pendiente y Región = Norte. ¿Qué pedidos quedan visibles?",
           "options": [
             "Pendientes de Norte",
             "Todos los pendientes más todas las filas de Norte",
@@ -394,7 +394,7 @@ const partsByModule = [
           "explanation": "Una fila debe cumplir ambas condiciones."
         },
         {
-          "question": "¿Qué ocurre al limpiar un filtro?",
+          "question": "Tienes filtros para Pendiente y Norte. Quitas solo el filtro de Región. ¿Qué sucede con las filas visibles?",
           "options": [
             "Vuelven a verse las filas compatibles con los filtros que quedan",
             "Se borran filas",
@@ -404,7 +404,7 @@ const partsByModule = [
           "explanation": "El filtro afecta visibilidad."
         },
         {
-          "question": "Si el filtro no devuelve datos, ¿qué revisas?",
+          "question": "Un compañero asegura que hay pedidos pendientes pero tu filtro muestra una tabla vacía. ¿Qué revisas antes de modificar datos?",
           "options": [
             "Criterios y filtros activos",
             "El tamaño de fuente",
@@ -421,7 +421,7 @@ const partsByModule = [
       "example": "Define Pendiente, En proceso y Completado. Para revisar pedidos repetidos, compara el ID de pedido antes de borrar filas.",
       "questions": [
         {
-          "question": "¿Qué controla una lista desplegable?",
+          "question": "En la columna Estado aparecen variantes como Pend., pendiente y Pendiente. ¿Qué control ofrece una lista de validación para futuras entradas?",
           "options": [
             "Los valores permitidos en una celda",
             "La suma de importes",
@@ -431,7 +431,7 @@ const partsByModule = [
           "explanation": "La lista normaliza la captura."
         },
         {
-          "question": "Dos clientes se llaman Ana. ¿Son duplicados?",
+          "question": "En el catálogo ves dos clientes llamados Ana. Antes de quitar una fila como duplicada, ¿cómo compruebas si se trata de la misma persona?",
           "options": [
             "Hay que comparar sus identificadores",
             "Sí, el nombre basta",
@@ -441,7 +441,7 @@ const partsByModule = [
           "explanation": "El nombre no identifica de forma única."
         },
         {
-          "question": "¿Qué respaldo conviene antes de quitar duplicados?",
+          "question": "Vas a limpiar pedidos repetidos en un archivo compartido. ¿Qué dejas preparado por si el criterio elimina un registro válido?",
           "options": [
             "Una copia de la tabla original",
             "Cambiar toda la hoja a texto",
@@ -460,17 +460,17 @@ const partsByModule = [
       "example": "Para una meta de 85 usa =SI(B2>=85;\"Cumple\";\"Revisar\"). Prueba 84, 85 y 86, incluidos ambos lados del umbral.",
       "questions": [
         {
-          "question": "¿85 cumple >=85?",
+          "question": "La meta de un equipo es «85 puntos o más». Un equipo tiene exactamente 85. ¿Cumple la condición >=85?",
           "options": [
             "Sí",
-            "No",
-            "Solo si no tiene formato"
+            "No, solo cuenta una nota superior a 85",
+            "No, 85 tendría que ser el máximo permitido"
           ],
           "correct": 0,
           "explanation": "El operador incluye la igualdad."
         },
         {
-          "question": "¿Qué devuelve SI si no se cumple >=85?",
+          "question": "En tu hoja, =SI(B2>=85;\"Cumple\";\"Revisar\") clasifica resultados. Si B2 es 84, ¿qué verá el equipo?",
           "options": [
             "Revisar",
             "Cumple",
@@ -480,7 +480,7 @@ const partsByModule = [
           "explanation": "Se usa el argumento de la rama falsa."
         },
         {
-          "question": "¿Qué tres valores prueban bien el límite?",
+          "question": "Antes de enviar la hoja quieres comprobar que la regla >=85 funciona en ambos lados y en el límite. ¿Qué valores eliges?",
           "options": [
             "84, 85, 86",
             "10, 20, 30",
@@ -497,7 +497,7 @@ const partsByModule = [
       "example": "Para los valores 74, 85 y 91, usa =CONTAR.SI(B2:B4;\">=85\") para obtener 2.",
       "questions": [
         {
-          "question": "¿Qué devuelve CONTAR.SI con dos coincidencias?",
+          "question": "La tabla tiene tres asesores con puntajes 74, 85 y 91. ¿Qué devuelve CONTAR.SI al contar los puntajes de 85 o más?",
           "options": [
             "2",
             "La suma de ambos importes",
@@ -507,7 +507,7 @@ const partsByModule = [
           "explanation": "La función cuenta registros."
         },
         {
-          "question": "¿Qué criterio distingue 85 o más?",
+          "question": "Vas a escribir el criterio de CONTAR.SI para una meta que incluye el 85. ¿Cuál coincide con esa instrucción?",
           "options": [
             "\">=85\"",
             "\">85\"",
@@ -517,7 +517,7 @@ const partsByModule = [
           "explanation": "Solo >= incluye los valores iguales o superiores."
         },
         {
-          "question": "¿Dónde va el rango de valores en CONTAR.SI?",
+          "question": "En =CONTAR.SI(B2:B4;\">=85\"), ¿qué posición ocupa el rango de notas que se evalúa?",
           "options": [
             "Primer argumento",
             "Segundo argumento",
@@ -534,7 +534,7 @@ const partsByModule = [
       "example": "Si A2:A4 contiene categorías y B2:B4 importes, usa =SUMAR.SI(A2:A4;\"Libros\";B2:B4).",
       "questions": [
         {
-          "question": "¿Qué rango se suma en el ejemplo?",
+          "question": "En tu inventario A2:A4 tiene la categoría y B2:B4 el importe. Si sumas las ventas de Libros con SUMAR.SI, ¿qué rango aporta los valores?",
           "options": [
             "B2:B4",
             "A2:A4",
@@ -544,7 +544,7 @@ const partsByModule = [
           "explanation": "El tercer argumento indica los registros numéricos."
         },
         {
-          "question": "¿Qué problema hay con A2:A4 y B3:B5?",
+          "question": "Escribes SUMAR.SI usando A2:A4 para regiones y B3:B5 para importes. Las columnas son las correctas. ¿Qué problema queda?",
           "options": [
             "Las filas de criterio y suma quedan desalineadas",
             "No se puede sumar ninguna columna",
@@ -554,7 +554,7 @@ const partsByModule = [
           "explanation": "Cada criterio debe corresponder a su importe."
         },
         {
-          "question": "¿Qué función calcula ingresos de una categoría?",
+          "question": "Tu jefa pide conocer el dinero vendido en Libros, no la cantidad de pedidos. ¿Qué función aplicarías para obtener ese total?",
           "options": [
             "SUMAR.SI",
             "CONTAR.SI",
@@ -573,7 +573,7 @@ const partsByModule = [
       "example": "En un catálogo, P03 identifica un solo producto. Compara un código de pedido con ese catálogo antes de calcular el importe.",
       "questions": [
         {
-          "question": "¿Qué campo usarías como clave?",
+          "question": "Tienes nombre, color y código en un catálogo. Dos productos se llaman igual. ¿Con qué campo relacionarías el pedido con un registro único?",
           "options": [
             "Código único",
             "Color del producto",
@@ -583,7 +583,7 @@ const partsByModule = [
           "explanation": "El código identifica un registro aunque se reordene la fuente."
         },
         {
-          "question": "¿Qué revisar si dos códigos aparentemente iguales no coinciden?",
+          "question": "La búsqueda no encuentra un código que se ve igual en el pedido y el catálogo. ¿Qué diferencia difícil de ver revisarías?",
           "options": [
             "Espacios y tipo de dato",
             "El color de fondo",
@@ -593,7 +593,7 @@ const partsByModule = [
           "explanation": "Las diferencias invisibles pueden causar ausencia de coincidencia."
         },
         {
-          "question": "¿Por qué son un problema dos precios para P03?",
+          "question": "Dos filas del catálogo tienen el código P03, una con precio 27000 y otra con 30000. ¿Qué riesgo aparece al recuperar el precio por código?",
           "options": [
             "La búsqueda dejará de identificar un precio inequívoco",
             "La fórmula siempre suma los dos",
@@ -610,7 +610,7 @@ const partsByModule = [
       "example": "Si A2:A8 contiene códigos, B2:B8 precios y D2 el código solicitado, usa BUSCARX(D2;$A$2:$A$8;$B$2:$B$8;\"No encontrado\").",
       "questions": [
         {
-          "question": "¿Cuál es el rango de retorno en el ejemplo?",
+          "question": "En el catálogo A2:A8 tiene los códigos y B2:B8 los precios. Al buscar el código del pedido D2, ¿qué rango debe devolver BUSCARX?",
           "options": [
             "$B$2:$B$8",
             "$A$2:$A$8",
@@ -620,7 +620,7 @@ const partsByModule = [
           "explanation": "El rango de retorno contiene los precios."
         },
         {
-          "question": "¿Qué mantienes fijo al copiar hacia abajo?",
+          "question": "Ya recuperaste el precio del primer pedido. Al copiar la fórmula a las demás filas, ¿qué rangos deben permanecer en el mismo sitio?",
           "options": [
             "Los rangos del catálogo",
             "El código D2 de cada fila",
@@ -630,7 +630,7 @@ const partsByModule = [
           "explanation": "El catálogo permanece y el código de entrada varía."
         },
         {
-          "question": "¿Qué modo corresponde a códigos?",
+          "question": "El pedido trae P03 y el catálogo contiene P02, P03 y P04. ¿Qué tipo de coincidencia asegura que recuperes el precio de P03?",
           "options": [
             "Coincidencia exacta",
             "Aproximación sin importar orden",
@@ -647,7 +647,7 @@ const partsByModule = [
       "example": "Escribe P99, que no está en el catálogo. Verifica que el mensaje sea claro y que no puedas interpretar esa fila como venta gratuita.",
       "questions": [
         {
-          "question": "¿Cómo marcas una clave que falta?",
+          "question": "El pedido trae P99, que no existe en la lista de productos. ¿Qué resultado diferencia ese caso de un precio real de cero?",
           "options": [
             "No encontrado",
             "Precio 0",
@@ -657,7 +657,7 @@ const partsByModule = [
           "explanation": "Así se distingue ausencia de un valor real."
         },
         {
-          "question": "Si el código sí existe pero no se encuentra, ¿qué haces?",
+          "question": "Ves P03 en el catálogo pero BUSCARX reporta que falta. ¿Qué conviene verificar antes de usar el precio de otro registro?",
           "options": [
             "Comprobar formato y espacios",
             "Aceptar un precio aproximado",
@@ -667,7 +667,7 @@ const partsByModule = [
           "explanation": "La corrección requiere que ambas claves coincidan."
         },
         {
-          "question": "¿Qué conviene hacer con una fila sin precio antes de cerrar el total?",
+          "question": "Estás a punto de cerrar el total diario. Hay una venta sin precio porque no se encontró su código. ¿Qué haces con esa fila?",
           "options": [
             "Revisarla y resolver la ausencia",
             "Adivinar un precio",
@@ -686,7 +686,7 @@ const partsByModule = [
       "example": "Abre la hoja Datos. Busca Región, Mes e Importe. Comprueba que hay ocho operaciones, incluida la última del rango.",
       "questions": [
         {
-          "question": "¿Cuál es la unidad de cada fila?",
+          "question": "La hoja Datos contiene Región, Mes e Importe y ocho movimientos. Para que el resumen sea correcto, ¿qué debe representar cada fila de datos?",
           "options": [
             "Una venta",
             "El total del mes",
@@ -696,7 +696,7 @@ const partsByModule = [
           "explanation": "Cada fila es un registro que se agregará."
         },
         {
-          "question": "¿Qué comprobación evita omitir la venta final?",
+          "question": "Agregaste una venta después de armar la tabla dinámica. ¿Qué comprobación evita que la última operación quede excluida?",
           "options": [
             "Verificar que el rango llega hasta la última fila",
             "Cambiar el gráfico de color",
@@ -706,7 +706,7 @@ const partsByModule = [
           "explanation": "El resumen solo conoce el rango fuente."
         },
         {
-          "question": "¿Por qué Importe debe ser numérico?",
+          "question": "Tu tabla está contando las ventas cuando querías sumar el dinero. ¿Por qué conviene confirmar que Importe se guardó como número?",
           "options": [
             "Para poder sumarlo como cantidad",
             "Para que se convierta en texto",
@@ -723,7 +723,7 @@ const partsByModule = [
       "example": "Para responder cuánto vendió cada región por mes, coloca Región en Filas, Mes en Columnas e Importe en Valores con SUMA.",
       "questions": [
         {
-          "question": "¿Qué va en Columnas para comparar periodos?",
+          "question": "El jefe de ventas quiere una columna para enero y otra para febrero dentro del resumen. ¿Qué campo arrastras a Columnas?",
           "options": [
             "Mes",
             "Importe",
@@ -733,7 +733,7 @@ const partsByModule = [
           "explanation": "Cada mes aparece como una columna."
         },
         {
-          "question": "¿Qué eliges en Valores para ingresos totales?",
+          "question": "El resumen debe mostrar el dinero facturado por región, no el número de pedidos. ¿Qué agregación seleccionas en Valores?",
           "options": [
             "SUMA de Importe",
             "CONTAR de Importe",
@@ -743,7 +743,7 @@ const partsByModule = [
           "explanation": "CONTAR mide operaciones; SUMA mide el importe."
         },
         {
-          "question": "¿Qué control permite ver solo Norte?",
+          "question": "La tabla ya muestra todas las regiones. Te piden revisar solo Norte sin editar los datos de origen. ¿Qué control usas?",
           "options": [
             "Filtro de Región",
             "Formato de moneda",
@@ -760,7 +760,7 @@ const partsByModule = [
       "example": "Si dos categorías suman 200 y 350, el total es 550. Grafica solo ambas categorías para evitar que 550 parezca una tercera categoría.",
       "questions": [
         {
-          "question": "Si los totales no cuadran, ¿qué revisas?",
+          "question": "La tabla dinámica arroja 780, pero al sumar la fuente obtienes 820. ¿Qué elementos verificas antes de compartir el informe?",
           "options": [
             "Rango, filtros y agregación",
             "Color de fondo",
@@ -770,7 +770,7 @@ const partsByModule = [
           "explanation": "Esos ajustes cambian los datos resumidos."
         },
         {
-          "question": "¿Qué excluyes de un gráfico de categorías?",
+          "question": "Vas a hacer un gráfico con cada región como categoría. Además de Norte y Sur, la tabla muestra Total general. ¿Qué fila excluyes?",
           "options": [
             "La fila Total general",
             "Todas las categorías",
@@ -780,7 +780,7 @@ const partsByModule = [
           "explanation": "El total agrupa todas las categorías."
         },
         {
-          "question": "¿Qué gráfico compara regiones por mes?",
+          "question": "Tu equipo quiere comparar enero y febrero lado a lado para cada región. ¿Qué gráfico elegirías?",
           "options": [
             "Columnas agrupadas",
             "Un único gráfico circular con todos los totales",
@@ -799,7 +799,7 @@ const partsByModule = [
       "example": "Pregunta: ¿qué región aportó más al trimestre? Muestra ventas totales, participación de la región líder y el nombre de esa región.",
       "questions": [
         {
-          "question": "¿Con qué empiezas el tablero?",
+          "question": "Te piden un tablero para una reunión y tienes ventas, devoluciones y descuentos. Antes de elegir qué mostrar, ¿por dónde empezarías?",
           "options": [
             "La pregunta de negocio",
             "El color de los botones",
@@ -809,7 +809,7 @@ const partsByModule = [
           "explanation": "La pregunta define indicadores y visualizaciones."
         },
         {
-          "question": "¿Cómo calculas participación?",
+          "question": "El director quiere saber qué tanto aportó Costa al total vendido. ¿Cómo calculas esa participación?",
           "options": [
             "Categoría dividida entre total",
             "Total dividido entre categoría",
@@ -819,7 +819,7 @@ const partsByModule = [
           "explanation": "La porción se mide respecto al conjunto."
         },
         {
-          "question": "¿Qué acompañaría al indicador de ventas?",
+          "question": "El tablero muestra «Ventas: 950» sin contexto. ¿Qué información agregas para que esa cifra se pueda interpretar?",
           "options": [
             "La unidad y el periodo",
             "Una contraseña",
@@ -836,7 +836,7 @@ const partsByModule = [
       "example": "Compara dos regiones con barras. Para una serie mensual ordenada, usa una línea que muestre ascensos y descensos.",
       "questions": [
         {
-          "question": "¿Qué gráfico ayuda a ver tendencia mensual?",
+          "question": "En la reunión necesitan ver si las ventas subieron o bajaron durante seis meses. ¿Qué gráfico facilita seguir esos cambios en el tiempo?",
           "options": [
             "Línea",
             "Tarjeta de un solo valor",
@@ -846,7 +846,7 @@ const partsByModule = [
           "explanation": "Una línea muestra el cambio a lo largo del tiempo."
         },
         {
-          "question": "¿Por qué conviene incluir la unidad en el eje?",
+          "question": "El eje vertical dice 10, 20 y 30, pero ese valor se mide en miles de pesos. ¿Por qué conviene rotular la unidad?",
           "options": [
             "Aclara qué representan los valores",
             "Hace que el total suba",
@@ -856,7 +856,7 @@ const partsByModule = [
           "explanation": "Pesos, unidades y porcentajes se interpretan distinto."
         },
         {
-          "question": "¿Qué ocurre si incluyes el total como otra región?",
+          "question": "Tu gráfico tiene barras para Costa, Centro y Total. ¿Qué problema causa comparar el total como si fuera otra región?",
           "options": [
             "Distorsiona la comparación",
             "Aumenta el detalle de cada región",
@@ -873,7 +873,7 @@ const partsByModule = [
       "example": "Si Costa aporta 300 de un total de 500, explica: «Costa concentró 60 % del total del periodo». Revisa que el filtro de fecha esté visible.",
       "questions": [
         {
-          "question": "¿Qué prueba asegura que el tablero coincide con los registros?",
+          "question": "El tablero indica 400 y la hoja fuente suma 500. ¿Qué revisión comprueba cuál cifra corresponde a los registros del periodo?",
           "options": [
             "Conciliar totales con la fuente",
             "Cambiar títulos a negrita",
@@ -883,7 +883,7 @@ const partsByModule = [
           "explanation": "La comparación revela omisiones o dobles conteos."
         },
         {
-          "question": "¿Qué conclusión concuerda con 300 de 500?",
+          "question": "Costa registra 300 de un total de 500. ¿Cuál es una conclusión precisa para comunicar en la reunión?",
           "options": [
             "Costa aportó 60 %",
             "Costa aportó 30 %",
@@ -893,11 +893,11 @@ const partsByModule = [
           "explanation": "300 dividido entre 500 es 0,60."
         },
         {
-          "question": "¿Qué explicas si hay datos faltantes?",
+          "question": "Dos sedes enviaron ventas, otra aún no reporta. ¿Qué explicas al presentar el indicador consolidado?",
           "options": [
             "La limitación y su efecto posible",
-            "Un total inventado",
-            "Solo el nombre del autor"
+            "El total como definitivo sin aclaración",
+            "Un promedio como si fuera la venta real de la sede"
           ],
           "correct": 0,
           "explanation": "Los lectores deben saber qué parte del resultado está incompleta."
@@ -1300,6 +1300,51 @@ const finalQuestions = [
   }
 ];
 
+const unitScenarios = [
+  [
+    "Tu compañera te pide corregir B3 en el presupuesto. ¿Dónde haces el cambio?",
+    "El importe de 12500 aparece con símbolo de moneda. ¿Qué cambió al aplicarle ese formato?",
+    "Vas a seleccionar cuatro importes continuos, desde B2 hasta B5. ¿Qué tipo de selección es B2:B5?",
+    "Necesitas registrar el arriendo, los servicios y el transporte para poder filtrar gastos. ¿Cómo organizas los conceptos?"
+  ],
+  [
+    "Quieres que la hoja multiplique la cantidad por el precio en vez de guardar texto. ¿Con qué signo empiezas la fórmula?",
+    "Guardaste una sola tasa en H1 para todos los pedidos. ¿Qué referencia permanece fija al copiar en cualquier dirección?",
+    "En la primera fila tu fórmula lee B2. Si copias una fila hacia abajo, ¿en qué celda buscará el dato?",
+    "Una factura tiene el número de unidades y el precio de una unidad. ¿Qué operación calcula el importe de la línea?"
+  ],
+  [
+    "Dos vendedores registraron distinta cantidad de unidades. ¿Qué función calcula la media de sus resultados?",
+    "Al revisar las ventas de la semana quieres detectar la mayor cifra. ¿Qué hace MAX en esa columna?",
+    "B4 contiene la última venta del día. Si escribes SUMA(B2:B4), ¿incluyes esa venta?",
+    "El lunes vendiste 2 unidades y el martes 8. ¿Cuánto es el promedio de ambos días?"
+  ],
+  [
+    "Un filtro deja visible solo lo Pendiente. ¿Eso elimina los pedidos que ya se completaron?",
+    "La jefa quiere ordenar la base por importe y mantener cada valor junto al nombre de su cliente. ¿Qué seleccionas para ordenar?",
+    "Cada bodega escribe el estado de forma distinta. ¿Qué problema resuelve la validación de datos?",
+    "Hay dos clientes con el mismo nombre. ¿Qué dato usarías para mantenerlos separados al cruzar la información?"
+  ],
+  [
+    "Un empleado obtuvo exactamente 80 puntos y la meta dice >=80. ¿Alcanza esa meta?",
+    "Tu coordinador pide saber cuántos pedidos están pendientes. ¿CONTAR.SI suma el dinero de esos pedidos?",
+    "Quieres que SI escriba Revisar cuando la nota queda por debajo de la meta. ¿Admite la función un resultado para cuando la condición es falsa?",
+    "Tres alumnos obtuvieron 79, 80 y 90. Si la aprobación empieza en 80, ¿cuántos pasan?"
+  ],
+  [
+    "Vas a recuperar el precio de un producto desde el catálogo. ¿Qué dato sirve como clave confiable?",
+    "El código del pedido es P03 y existen códigos parecidos. ¿Qué tipo de coincidencia elegirías?",
+    "El código solicitado no está en el catálogo. ¿Qué debería mostrar la hoja para que puedas revisar el pedido?",
+    "Cada pedido incluye solo el código de producto. ¿Qué te devuelve una búsqueda bien configurada en el catálogo?"
+  ],
+  [
+    "La gerente quiere un renglón por región para comparar ventas. ¿Qué campo colocas en Filas?",
+    "La tabla dinámica debe mostrar la facturación total de cada grupo. ¿Qué operación eliges para Importe?",
+    "Quieres que enero y febrero se vean lado a lado. ¿Qué aporta configurar Mes en Columnas?",
+    "La tabla dinámica muestra únicamente Norte y la fuente tiene tres regiones. ¿Qué ajuste revisas primero?"
+  ]
+];
+
 export const partKinds = ['part:1','part:2','part:3'];
 
 export function moduleOutline(module) {
@@ -1322,5 +1367,8 @@ export function examQuestions(moduleId, kind) {
   if (part >= 0) return partsByModule[moduleId - 1][part].questions;
   if (kind !== 'long') return null;
   if (moduleId === 8) return finalQuestions;
-  return [...modules[moduleId - 1].questions, ...appliedQuestions[moduleId - 1]];
+  const contextualQuestions = modules[moduleId - 1].questions.map((item,index) => ({
+    ...item, question:unitScenarios[moduleId - 1][index]
+  }));
+  return [...contextualQuestions, ...appliedQuestions[moduleId - 1]];
 }

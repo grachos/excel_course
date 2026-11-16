@@ -12,6 +12,7 @@ import yauzl from 'yauzl';
 import {modules} from './course.js';
 import {gradeChecks} from './grading.js';
 import {examQuestions, moduleOutline} from './lessons.js';
+import {finalExamSchema, finishFinalExam, startFinalExam} from './final-exam.js';
 import {gradePivot, pivotSource} from './pivot.js';
 const app=express(), db=new pg.Pool({connectionString:process.env.DATABASE_URL});
 const origin=process.env.APP_ORIGIN;
@@ -28,7 +29,8 @@ CREATE TABLE IF NOT EXISTS challenges(id TEXT PRIMARY KEY,user_id INT REFERENCES
 CREATE TABLE IF NOT EXISTS platform_owner(singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton), user_id INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT);
 ALTER TABLE attempts ADD COLUMN IF NOT EXISTS owner_preview BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE challenges ADD COLUMN IF NOT EXISTS owner_preview BOOLEAN NOT NULL DEFAULT FALSE;
-CREATE INDEX IF NOT EXISTS attempts_user_id_id ON attempts(user_id,id);`);
+CREATE INDEX IF NOT EXISTS attempts_user_id_id ON attempts(user_id,id);
+${finalExamSchema}`);
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const safeUser=u=>({id:u.id,name:u.name,email:u.email,tool:u.tool});
 const authLimit=rateLimit({windowMs:15*60000,limit:20});
@@ -86,7 +88,7 @@ app.use('/api/modules/:id',async(req,res,next)=>{
  const progress=await state(req.user);
  if(progress.slice(0,req.module.id-1).some(p=>!p.passed))return res.status(403).json({error:'Aprueba los módulos anteriores con 80 o más.'});next();
 });
-async function save(req,kind,report){await db.query('INSERT INTO attempts(user_id,module,kind,score,feedback,owner_preview) VALUES($1,$2,$3,$4,$5,$6)',[req.user.id,req.module.id,kind,report.score,JSON.stringify(report),req.user.is_owner]);}
+async function save(req,kind,report,client=db){await client.query('INSERT INTO attempts(user_id,module,kind,score,feedback,owner_preview) VALUES($1,$2,$3,$4,$5,$6)',[req.user.id,req.module.id,kind,report.score,JSON.stringify(report),req.user.is_owner]);}
 app.get('/api/modules/:id/template',async(req,res)=>{
  const w = new ExcelJS.Workbook();
  const guide = w.addWorksheet('Guía');
@@ -145,48 +147,77 @@ app.post('/api/modules/:id/practice',rateLimit({windowMs:60000,limit:5}),upload.
  }
  await save(req,'practice',report);res.json(report);
 });
-app.post('/api/modules/:id/exam',async(req,res)=>{
- const kind = req.body?.kind;
- const bank = examQuestions(req.module.id, kind);
- if (!bank) return res.status(400).json({error:'Selecciona un examen válido.'});
- if (req.module.id === 8 && kind === 'long') {
-   const progress = await state(req.user);
-   if (!Number.isFinite(progress[7].scores.practice)) {
-     return res.status(400).json({error:'Entrega primero el proyecto final y después abre el examen acumulativo.'});
-   }
+function shuffle(list) {
+ for (let i = list.length-1; i > 0; i--) {
+   const j = randomBytes(1)[0] % (i+1);
+   [list[i],list[j]] = [list[j],list[i]];
  }
- const items=bank.map(q=>{
- const options=q.options.map((text,i)=>({text,correct:i===q.correct}));for(let i=options.length-1;i>0;i--){const j=randomBytes(1)[0]%(i+1);[options[i],options[j]]=[options[j],options[i]];}return {...q,options};
- });
- const id=randomBytes(24).toString('hex');
- await db.query("DELETE FROM challenges WHERE user_id=$1 AND (expires<now() OR (module=$2 AND kind=$3 AND owner_preview=$4))",[req.user.id,req.module.id,kind,req.user.is_owner]);
- await db.query("INSERT INTO challenges(id,user_id,module,kind,answers,expires,owner_preview) VALUES($1,$2,$3,$4,$5,now()+interval '30 minutes',$6)",[id,req.user.id,req.module.id,kind,JSON.stringify(items),req.user.is_owner]);
- res.json({id,questions:items.map(q=>({question:q.question,options:q.options.map(o=>o.text)}))});
-});
-app.post('/api/modules/:id/exam/submit',async(req,res)=>{
- const {id,answers} = req.body ?? {};
- if (typeof id !== 'string' || !Array.isArray(answers) || answers.some(answer => !Number.isInteger(answer))) {
-   return res.status(400).json({error:'Selecciona una respuesta para cada pregunta.'});
- }
- const row=(await db.query('DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() AND owner_preview=$4 AND jsonb_array_length(answers)=$5 RETURNING *',[id,req.user.id,req.module.id,req.user.is_owner,answers.length])).rows[0];
- if(!row)return res.status(400).json({error:'Intento vencido o ya entregado. Inicia otro.'});
- const details = row.answers.map((question,index) => ({
+ return list;
+}
+
+function examReport(questions, answers) {
+ const details = questions.map((question,index) => ({
    question:question.question,
    ok:question.options[answers[index]]?.correct === true,
    message:question.explanation,
    correctAnswer:question.options.find(option => option.correct)?.text
  }));
- const report={score:100*details.filter(d=>d.ok).length/details.length,details};
- // The final long evaluation incorporates the submitted project, so passing requires both.
- if(req.module.id===8&&row.kind==='long'){
- const p=(await state(req.user))[7].scores.practice;
- if(!Number.isFinite(p)){return res.status(400).json({error:'Entrega primero el proyecto final y vuelve a iniciar el examen.'});}
- report.examScore=report.score;
- report.projectScore=p;
- report.score=Math.min(report.examScore,p);
- report.note='Para aprobar el módulo final se exige un mínimo de 80 en el examen y en el proyecto.';
+ return {score:100*details.filter(detail => detail.ok).length/details.length,details};
+}
+
+app.post('/api/modules/:id/exam',async(req,res)=>{
+ const kind = req.body?.kind;
+ const bank = examQuestions(req.module.id, kind);
+ if (!bank) return res.status(400).json({error:'Selecciona un examen válido.'});
+ const final = req.module.id === 8 && kind === 'long';
+ if (final && !Number.isFinite((await state(req.user))[7].scores.practice)) {
+   return res.status(400).json({error:'Entrega primero el proyecto final y después abre el examen acumulativo.'});
  }
- await save(req,row.kind,report);res.json(report);
+ const items = bank.map(question => ({
+   question:question.question, explanation:question.explanation,
+   options:shuffle(question.options.map((text,index) => ({text,correct:index===question.correct})))
+ }));
+ if (final) {
+   const result = await startFinalExam(db,req.user,shuffle(items));
+   return res.status(result.status).json(result.body);
+ }
+ const id = randomBytes(24).toString('hex');
+ await db.query("DELETE FROM challenges WHERE user_id=$1 AND (expires<now() OR (module=$2 AND kind=$3 AND owner_preview=$4))",[req.user.id,req.module.id,kind,req.user.is_owner]);
+ await db.query("INSERT INTO challenges(id,user_id,module,kind,answers,expires,owner_preview) VALUES($1,$2,$3,$4,$5,now()+interval '30 minutes',$6)",[id,req.user.id,req.module.id,kind,JSON.stringify(items),req.user.is_owner]);
+ res.json({id,questions:items.map(q=>({question:q.question,options:q.options.map(o=>o.text)}))});
+});
+
+app.post('/api/modules/:id/exam/submit',async(req,res)=>{
+ const {id,answers} = req.body ?? {};
+ if (typeof id !== 'string' || !Array.isArray(answers) || answers.some(answer => !Number.isInteger(answer))) {
+   return res.status(400).json({error:'Selecciona una respuesta para cada pregunta.'});
+ }
+ if (req.module.id === 8 && id.startsWith('final-')) {
+   const result = await finishFinalExam(db,req.user,id,answers,async (client,questions,final) => {
+     const {rows:[{project_score}]} = await client.query(
+       "SELECT MAX(score)::float AS project_score FROM attempts WHERE user_id=$1 AND module=8 AND kind='practice' AND owner_preview=$2",
+       [req.user.id,req.user.is_owner]
+     );
+     if (!Number.isFinite(project_score)) return null;
+     const report = examReport(questions,answers);
+     report.examScore = report.score;
+     report.projectScore = project_score;
+     report.score = Math.min(report.examScore,project_score);
+     report.note = 'Para aprobar el módulo final se exige un mínimo de 80 en el examen y en el proyecto.';
+     report.final = final;
+     await save(req,'long',report,client);
+     return report;
+   });
+   return res.status(result.status).json(result.body);
+ }
+ const {rows:[row]} = await db.query(
+   "DELETE FROM challenges WHERE id=$1 AND user_id=$2 AND module=$3 AND expires>now() AND owner_preview=$4 AND jsonb_array_length(answers)=$5 AND NOT (module=8 AND kind='long') RETURNING *",
+   [id,req.user.id,req.module.id,req.user.is_owner,answers.length]
+ );
+ if (!row) return res.status(400).json({error:'Intento vencido o ya entregado. Inicia otro.'});
+ const report = examReport(row.answers,answers);
+ await save(req,row.kind,report);
+ res.json(report);
 });
 app.get('/health',(req,res)=>res.json({ok:true}));
 app.use(express.static('public'));
