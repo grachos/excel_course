@@ -11,6 +11,7 @@ import {randomBytes,createHash} from 'node:crypto';
 import yauzl from 'yauzl';
 import {modules} from './course.js';
 import {gradeChecks} from './grading.js';
+import {gradePivot, pivotSource} from './pivot.js';
 const app=express(), db=new pg.Pool({connectionString:process.env.DATABASE_URL});
 const origin=process.env.APP_ORIGIN;
 if(!origin||!process.env.DATABASE_URL) throw Error('Configure APP_ORIGIN and DATABASE_URL');
@@ -86,9 +87,31 @@ app.use('/api/modules/:id',async(req,res,next)=>{
 });
 async function save(req,kind,report){await db.query('INSERT INTO attempts(user_id,module,kind,score,feedback,owner_preview) VALUES($1,$2,$3,$4,$5,$6)',[req.user.id,req.module.id,kind,report.score,JSON.stringify(report),req.user.is_owner]);}
 app.get('/api/modules/:id/template',async(req,res)=>{
- const w=new ExcelJS.Workbook();const guide=w.addWorksheet('Guía');guide.getCell('A1').value=req.module.title;guide.getCell('A2').value=req.module.task;guide.getColumn(1).width=100;guide.getCell('A2').alignment={wrapText:true};guide.getRow(2).height=100;
- const s=w.addWorksheet('Entrega');for(const c of req.module.checks){s.getCell(c.cell).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE7F4ED'}};}
- for(let i=1;i<=8;i++)s.getColumn(i).width=20;
+ const w = new ExcelJS.Workbook();
+ const guide = w.addWorksheet('Guía');
+ guide.addRows([[req.module.title],[req.module.task]]);
+ guide.getColumn(1).width = 100;
+ guide.getCell('A2').alignment = {wrapText:true};
+ guide.getRow(2).height = 100;
+ const platformSteps = req.module.platformSteps?.[req.user.tool] ?? [];
+ for (const [index, step] of platformSteps.entries()) {
+   const row = guide.addRow([(index + 1) + '. ' + step]);
+   row.getCell(1).alignment = {wrapText:true};
+   row.height = 38;
+ }
+ if (req.module.id === 7) {
+   const data = w.addWorksheet('Datos');
+   data.addRows(pivotSource);
+   data.getRow(1).font = {bold:true};
+   data.columns.forEach(column => {column.width = 18;});
+ }
+ const s = w.addWorksheet('Entrega');
+ if (req.module.id !== 7) {
+   for (const check of req.module.checks) {
+     s.getCell(check.cell).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFE7F4ED'}};
+   }
+ }
+ for (let i=1;i<=8;i++) s.getColumn(i).width=20;
  const buffer = Buffer.from(await w.xlsx.writeBuffer());
  res.set('Cache-Control', 'private, no-store');
  res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -105,8 +128,15 @@ app.post('/api/modules/:id/practice',rateLimit({windowMs:60000,limit:5}),upload.
  let w=new ExcelJS.Workbook();
  try{await zipSafe(req.file.buffer);await w.xlsx.load(req.file.buffer);}catch{return res.status(400).json({error:'No se pudo leer el archivo. Usa un XLSX válido, sin cifrar, de hasta 2 MB y 20 MB descomprimido.'});}
  const sheet=w.getWorksheet('Entrega');if(!sheet)return res.status(400).json({error:'Conserva la hoja llamada Entrega.'});
- const answers={};for(const c of req.module.checks){let v=sheet.getCell(c.cell).value;if(v&&typeof v==='object')v=v.result;answers[c.cell]=v;}
- const report=gradeChecks(req.module.checks,answers); report.mode='rules';report.note='Se verifican resultados guardados. No se recalculan fórmulas ni se califican gráficos o formatos. Si faltan resultados, abre, recalcula y guarda desde Excel o Sheets.';
+ const answers = {};
+ if (req.module.id !== 7) {
+   for (const {cell} of req.module.checks) {
+     const value = sheet.getCell(cell).value;
+     answers[cell] = value && typeof value === 'object' ? value.result : value;
+   }
+ }
+ const report = req.module.id === 7 ? gradePivot(sheet, req.module.checks) : gradeChecks(req.module.checks, answers);
+ report.mode='rules';report.note=req.module.reviewNote ?? 'Se verifican resultados guardados. No se recalculan fórmulas ni se califican gráficos o formatos. Si faltan resultados, abre, recalcula y guarda desde Excel o Sheets.';
  const explanation = await explainPractice(req.module.title, report.details);
  if (explanation) {
    report.tutor = explanation;

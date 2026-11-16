@@ -319,65 +319,76 @@
   },
   {
     "id": 7,
-    "title": "Agrupa ventas y compáralas en un gráfico",
+    "title": "Construye una tabla dinámica de ventas",
     "headers": [
-      "Categoría",
+      "Producto",
+      "Mes",
       "Importe",
-      "Grupo",
-      "Suma"
+      "Producto",
+      "Enero",
+      "Febrero",
+      "Total"
     ],
     "rows": [
       [
         "Libros",
+        "Enero",
         80
       ],
       [
         "Libros",
+        "Febrero",
         120
       ],
       [
         "Arte",
+        "Enero",
         150
+      ],
+      [
+        "Arte",
+        "Febrero",
+        50
       ]
     ],
     "steps": [
       {
         "cell": "A1",
-        "action": "Tabla dinámica",
-        "note": "Selecciona los datos. Inserta una tabla dinámica y usa Categoría en Filas.",
+        "action": "Selecciona A1:C5 → Insertar → Tabla dinámica",
+        "note": "El rango incluye los encabezados y las cuatro ventas. Usa esos datos como fuente.",
         "updates": {},
         "hidden": [],
         "bars": []
       },
       {
         "cell": "D2",
-        "action": "Valores: SUMA de Importe",
-        "note": "En Valores elige SUMA. Libros reúne dos ventas (80 y 120).",
+        "action": "Filas: Producto · Valores: SUMA de Importe",
+        "note": "La tabla agrupa las ventas por producto. Libros y Arte suman 200 cada uno.",
         "updates": {
-          "C2": "Libros",
-          "D2": "200",
-          "C3": "Arte",
-          "D3": "150"
+          "D2": "Arte",
+          "D3": "Libros",
+          "G2": 200,
+          "G3": 200
         },
         "hidden": [],
         "bars": []
       },
       {
-        "cell": "D2",
-        "action": "Gráfico de barras",
-        "note": "Grafica los totales por categoría. La barra de Libros debe ser más larga.",
-        "updates": {},
+        "cell": "E4",
+        "action": "Columnas: Mes · Mostrar totales generales",
+        "note": "Enero suma 230, febrero suma 170 y el total es 400. Agregar Mes no cambia el total.",
+        "updates": {
+          "E2": 150,
+          "F2": 50,
+          "E3": 80,
+          "F3": 120,
+          "D4": "Total",
+          "E4": 230,
+          "F4": 170,
+          "G4": 400
+        },
         "hidden": [],
-        "bars": [
-          [
-            "Libros",
-            200
-          ],
-          [
-            "Arte",
-            150
-          ]
-        ]
+        "bars": []
       }
     ]
   },

@@ -73,6 +73,33 @@ test('sessions, isolation, workbook review and module unlocking',{skip:!process.
  const ownerReportDetail = await (await request('/owner/students/'+previewProfile.user.id,{cookie:cookieB})).json();
  assert.equal(ownerReportDetail.attempts.length,0);
  assert.equal(ownerReportDetail.student.progress[7].score,null);
+ const pivotTemplate = await request('/modules/7/template',{cookie:cookieB});
+ assert.equal(pivotTemplate.status,200);
+ const pivotBook = new ExcelJS.Workbook();
+ await pivotBook.xlsx.load(Buffer.from(await pivotTemplate.arrayBuffer()));
+ const pivotData = pivotBook.getWorksheet('Datos');
+ assert.equal(pivotData.rowCount,9);
+ assert.equal(pivotData.getCell('C1').value,'Importe');
+ assert.equal(pivotData.getCell('C9').value,40);
+ const pivotResult = pivotBook.getWorksheet('Entrega');
+ pivotResult.addRows([
+   ['Suma de Importe','Etiquetas de columna'],
+   ['Región','Febrero','Enero','Grand Total'],
+   ['Sur',200,90,290], ['Centro',125,75,200], ['Norte',180,150,330],
+   ['Grand Total',505,315,820]
+ ]);
+ async function uploadPivot() {
+   const form = new FormData();
+   form.append('file', new Blob([await pivotBook.xlsx.writeBuffer()]), 'pivot.xlsx');
+   const result = await request('/modules/7/practice',{cookie:cookieB,method:'POST',body:form,raw:true});
+   assert.equal(result.status,200);
+   return result.json();
+ }
+ assert.equal((await uploadPivot()).score,100);
+ pivotResult.getCell('B3').value=2;
+ const mistaken = await uploadPivot();
+ assert.equal(mistaken.score,92);
+ assert.equal(mistaken.details.find(detail => detail.cell==='sur:febrero').ok,false);
  const ownerList = await (await request('/owner/students?q='+encodeURIComponent(email),{cookie:cookieB})).json();
  const student = ownerList.students.find(row => row.email === email);
  assert.equal(student.approved,1);
