@@ -88,7 +88,10 @@ function lesson(id) {
     '<dl class="lesson-scores"><div><dt>Práctica</dt><dd data-score-kind="practice">'+scoreText(scores.practice)+'</dd></div>' +
     '<div><dt>Nota de partes</dt><dd data-score-kind="short">'+scoreText(scores.short)+'</dd></div>' +
     '<div><dt>'+examTitle+'</dt><dd data-score-kind="long">'+scoreText(scores.long)+'</dd></div></dl>' +
-    (final?'<div id="final-status" class="final-timing" aria-label="Estado del examen final"><p role="status">Consultando intentos…</p></div>':'') +
+    (final ? '<div id="final-clock" class="exam-clock" aria-label="Tiempo del examen final">' +
+      '<div><span>Tiempo del examen final</span><strong data-exam-clock-digits role="timer">60:00</strong></div>' +
+      '<p data-exam-clock-note>El contador empieza cuando inicias un intento.</p></div>' +
+      '<div id="final-status" class="final-timing" aria-label="Estado del examen final"><p role="status">Consultando intentos…</p></div>' : '') +
     '<button type="button" class="primary" data-exam="long"'+(final?' disabled':'')+'>Iniciar '+examTitle.toLowerCase()+'</button>' +
     '<div data-quiz="long"></div></section></div>';
 
@@ -122,6 +125,13 @@ function finalAvailableText(value) {
 function timeRemaining(deadline) {
   const remaining = Math.max(0,Math.ceil((deadline-performance.now())/1000));
   return {remaining,text:String(Math.floor(remaining/60)).padStart(2,'0')+':'+String(remaining%60).padStart(2,'0')};
+}
+
+function renderFinalClock(value, message) {
+  const clock = $('#final-clock');
+  if (!clock) return;
+  clock.querySelector('[data-exam-clock-digits]').textContent=value;
+  clock.querySelector('[data-exam-clock-note]').textContent=message;
 }
 
 function finalDeadline(instant,serverNow) {
@@ -164,7 +174,6 @@ async function syncFinalStatus() {
     if (examPassed && locked) guidance+=' '+finalAvailableText(final.availableAt);
     panel.innerHTML='<strong>Intentos utilizados: '+final.attemptsUsed+' de '+final.maxAttempts+'</strong>'+
       '<p>Intentos disponibles: '+final.attemptsRemaining+'</p>'+
-      '<p data-status-clock'+(active?' role="timer"':'')+'></p>'+
       '<p role="status">'+esc(latest+guidance)+'</p>';
     button.dataset.locked=String(locked || !hasProject);
     button.disabled=locked || !hasProject;
@@ -175,20 +184,24 @@ async function syncFinalStatus() {
 
     if (active || locked) {
       const deadline=finalDeadline(active?final.expiresAt:final.availableAt,final.serverNow);
-      const clock=panel.querySelector('[data-status-clock]');
+      if (locked) renderFinalClock('—','El examen está en espera. Consulta abajo cuándo podrás reintentar.');
       function draw() {
         if (!panel.isConnected || $('#lesson').hidden) {
           clearInterval(finalStatusInterval);
           return;
         }
         const {remaining,text}=timeRemaining(deadline);
-        if (active) clock.textContent='Tiempo restante: '+text;
+        if (active) renderFinalClock(text,'Tiempo restante del intento en curso.');
         if (!remaining) syncFinalStatus();
       }
       finalStatusInterval=setInterval(draw,active?500:1000);
       draw();
     } else {
-      panel.querySelector('[data-status-clock]').textContent='Tiempo por intento: 60 minutos.';
+      if (final.expiredAt && final.attemptsUsed) {
+        renderFinalClock('00:00','Se agotó el último intento. El siguiente tendrá 60 minutos.');
+      } else {
+        renderFinalClock('60:00','El contador empieza cuando inicias un intento.');
+      }
     }
   } catch (err) {
     if (request!==finalStatusRequest || !panel.isConnected) return;
@@ -200,7 +213,9 @@ async function syncFinalStatus() {
 
 function enableFinalTimer(form, final) {
   const deadline = finalDeadline(final.expiresAt,final.serverNow);
-  const display = form.querySelector('[data-final-timer]');
+  const dock = form.querySelector('[data-final-dock]');
+  const display = dock.querySelector('[data-final-timer]');
+  const expiredNotice = form.querySelector('[data-final-expired]');
   const draftKey = 'celda-final-' + form.dataset.id;
   try {
     const draft = JSON.parse(sessionStorage.getItem(draftKey) || '{}');
@@ -212,12 +227,13 @@ function enableFinalTimer(form, final) {
     try { sessionStorage.setItem(draftKey,JSON.stringify(Object.fromEntries(new FormData(form)))); } catch {}
   });
   function draw() {
-    if (!form.isConnected) return false;
+    if (!form.isConnected || $('#lesson').hidden) return false;
     const {remaining,text} = timeRemaining(deadline);
-    display.textContent = remaining ? 'Tiempo restante: '+text
-      : 'Se agotó el tiempo de este intento. Usa el botón del examen para consultar tu siguiente intento.';
+    display.textContent = text;
+    dock.dataset.runningOut = String(remaining <= 300);
     if (!remaining) {
       form.dataset.expired='true';
+      expiredNotice.hidden=false;
       form.querySelectorAll('input, button').forEach(control => {control.disabled=true;});
       try { sessionStorage.removeItem(draftKey); } catch {}
     }
@@ -236,8 +252,10 @@ async function openQuiz(button) {
   try {
     const data=await api('/modules/'+moduleId+'/exam',{method:'POST',body:JSON.stringify({kind})});
     if(!target?.isConnected)return;
-    const header = data.final ? '<div class="final-timing final-timing-sticky"><strong>Intento '+data.final.attempt+' de '+data.final.maxAttempts+
-      '</strong><p data-final-timer role="timer">Tiempo restante</p></div>' : '';
+    const header = data.final ? '<div class="exam-clock-dock" data-final-dock aria-label="Reloj del examen final">' +
+      '<div><span>Tiempo restante</span><strong data-final-timer role="timer">60:00</strong></div>' +
+      '<span>Intento '+data.final.attempt+' de '+data.final.maxAttempts+'</span></div>' +
+      '<p class="final-timing" data-final-expired hidden role="status">Se agotó el tiempo. Usa el botón del examen para consultar tu siguiente intento.</p>' : '';
     target.innerHTML='<form class="quiz-form" data-id="'+data.id+'" data-module-id="'+moduleId+'" data-count="'+data.questions.length+'">' + header +
       data.questions.map((q,i)=>'<fieldset><legend>'+ (i+1) +'. '+esc(q.question)+'</legend>' +
         q.options.map((option,j)=>'<label><input type="radio" name="q'+i+'" value="'+j+'" required>'+esc(option)+'</label>').join('')+
