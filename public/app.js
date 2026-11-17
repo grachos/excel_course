@@ -354,7 +354,7 @@ async function openQuiz(button) {
   try {
     const data=await api('/modules/'+moduleId+'/exam',{method:'POST',body:JSON.stringify({kind})});
     if(!target?.isConnected)return;
-    const timing = data.final || data.timing;
+    const timing = kind === 'long' ? (data.final || data.timing) : null;
     const header = timing ? '<div class="exam-clock-dock" data-final-dock aria-label="Tiempo restante de la evaluación">' +
       '<div><span>Tiempo restante</span><strong data-final-timer role="timer">60:00</strong></div>' +
       (data.final ? '<span>Intento '+data.final.attempt+' de '+data.final.maxAttempts+'</span>' : '<span>'+(kind==='long'?'Evaluación de unidad · 60 minutos':'Examen de parte · 30 minutos')+'</span>')+'</div>' +
